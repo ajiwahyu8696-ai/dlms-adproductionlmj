@@ -353,12 +353,10 @@
     </div>
 </div>
 
-<!-- SINGLE SCRIPT TYPE MODULE: MENJAMIN LIFECYCLE BERURUTAN & TIDAK RACE CONDITION -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
     import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
-    // 1. Firebase Config & Initialization
     const firebaseConfig = {
         apiKey: "AIzaSyA7Rzfvjrw-OZe7Qh7W9nxkr1EUq6vnqDM",
         authDomain: "ad-audio-dlms.firebaseapp.com",
@@ -373,13 +371,11 @@
     const app = initializeApp(firebaseConfig);
     const database = getDatabase(app);
 
-    // Bind ke scope window agar global scope aman jika dibutuhkan module lain
     window.fbDatabase = database;
     window.fbRef = ref;
     window.fbGet = get;
     window.fbSet = set;
 
-    // 2. Global State & App Logic
     let isProUser = false; 
     let countdownInterval = null; 
 
@@ -426,7 +422,7 @@
     function triggerActivationNotice() {
         alert("🔒 PRO VERSION EXCLUSIVE\n\nFitur ini terkunci. Hubungi AD AUDIO PRODUCTION / AJI LUMAJANG untuk membeli lisensi penuh Pro Engine.");
     }
-    window.triggerActivationNotice = triggerActivationNotice; // Bind ke global window untuk onclick HTML
+    window.triggerActivationNotice = triggerActivationNotice;
 
     function applyVisualLocks() {
         if (!isProUser) {
@@ -782,7 +778,7 @@
             ctxRender.fillText(lbl + 'Hz', x + 2, H - 4);
         });
 
-        ctxRender.strokeStyle = 'var(--accent-blue)'; ctxRender.lineWidth = 3; ctxRender.beginPath();
+        ctxRender.strokeStyle = '#00ecff'; ctxRender.lineWidth = 3; ctxRender.beginPath();
         
         let peqBandsData = [];
         for (let i = 0; i < 3; i++) {
@@ -796,6 +792,7 @@
 
         if(muteState.l.eq) peqBandsData = []; 
 
+        const Fs = 44100; 
         for (let px = 0; px < W; px++) {
             let logPerc = px / W;
             let currentFreq = 20 * Math.pow(1000 / 20, logPerc);
@@ -803,15 +800,29 @@
 
             peqBandsData.forEach(b => {
                 if (b.g === 0) return;
-                let w0 = 2 * Math.PI * b.f; let w = 2 * Math.PI * currentFreq;
-                let alpha = Math.sin(w / 44100) / (2 * b.q); 
-                let A = Math.pow(10, b.g / 40);
                 
-                let num = Math.pow(w0, 2) - Math.pow(w, 2);
-                let den = Math.pow(w0, 2) - Math.pow(w, 2);
-                let mag = Math.sqrt((Math.pow(num,2) + Math.pow(w0*w*alpha*A,2)) / (Math.pow(den,2) + Math.pow(w0*w*alpha/A,2)));
-                let gainAtFreq = 20 * Math.log10(mag);
-                if(!isNaN(gainAtFreq)) totalGainDb += gainAtFreq;
+                let w0 = 2 * Math.PI * b.f / Fs;
+                let alpha = Math.sin(w0) / (2 * Math.max(b.q, 0.01));
+                let A = Math.pow(10, b.g / 40);
+
+                let b0 = 1 + alpha * A;
+                let b1 = -2 * Math.cos(w0);
+                let b2 = 1 - alpha * A;
+                let a0 = 1 + alpha / A;
+                let a1 = -2 * Math.cos(w0);
+                let a2 = 1 - alpha / A;
+
+                let w = 2 * Math.PI * currentFreq / Fs;
+                let cosW = Math.cos(w);
+                let cos2W = Math.cos(2 * w);
+
+                let num = (b0*b0 + b1*b1 + b2*b2) + 2*(b0*b1 + b1*b2)*cosW + 2*b0*b2*cos2W;
+                let den = (a0*a0 + a1*a1 + a2*a2) + 2*(a0*a1 + a1*a2)*cosW + 2*a0*a2*cos2W;
+                
+                if (den > 0.00001) {
+                    let gainAtFreq = 10 * Math.log10(num / den);
+                    if (!isNaN(gainAtFreq)) totalGainDb += gainAtFreq;
+                }
             });
 
             let y = (H / 2) - (totalGainDb * (H / 30)); 
@@ -866,7 +877,9 @@
         if (internalGenNode) { try { internalGenNode.stop(); } catch(e){} internalGenNode.disconnect(); internalGenNode = null; }
         const genType = document.getElementById('gen-type').value; const freqRow = document.getElementById('sine-freq-row');
         if (genType === 'off') { freqRow.style.display = 'none'; return; }
-        audioCtx.resume();
+        
+        if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+        
         if (genType === 'pink') { freqRow.style.display = 'none'; internalGenNode = createPinkNoiseNode(); } 
         else if (genType === 'sine') { freqRow.style.display = 'grid'; let freqVal = parseInt(document.getElementById('gen-sine-freq').value); internalGenNode = audioCtx.createOscillator(); internalGenNode.type = 'sine'; internalGenNode.frequency.setValueAtTime(freqVal, audioCtx.currentTime); }
         internalGenNode.connect(masterGainNode); internalGenNode.start();
@@ -1081,7 +1094,7 @@
     function processRealtimeVUMeters() {
         if (!nodeL || !nodeR) return;
         const runAnalysis = (engineObj, chLabel, txtObj) => {
-            if (!engineObj || !engineObj.analyser) return;
+            if (!engineObj || !engineObj.analyser || !audioCtx || audioCtx.state !== "running") return;
             const dataArray = new Uint8Array(engineObj.analyser.frequencyBinCount); engineObj.analyser.getByteTimeDomainData(dataArray); 
             let sum = 0; for (let i = 0; i < dataArray.length; i++) { let v = (dataArray[i] - 128) / 128; sum += v * v; }
             let rms = Math.sqrt(sum / dataArray.length); let db = 20 * Math.log10(rms); if (db === -Infinity || db < -90) db = -90;
@@ -1101,9 +1114,15 @@
         renderFrame();
     }
 
-    // 3. App Initialization Lifecycle Trigger
     buildInterfaceAwal(); 
     connectUIElements();
+
+    const pemicuAmanAndroid = () => {
+        if (!audioCtx) { initSystemAudio(); }
+        else if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+    };
+    document.body.addEventListener('touchstart', pemicuAmanAndroid, { passive: true });
+    document.body.addEventListener('click', pemicuAmanAndroid);
 
     const localSavedKey = localStorage.getItem('aji_audio_saved_key');
     if (localSavedKey) {
