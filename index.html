@@ -117,7 +117,7 @@
         .peq-field-item label { font-size: 0.55rem; color: #6e7681; }
         .peq-box-val { background: #040608; border: 1px solid #3a4756; color: #fff; font-size: 0.7rem; font-weight: bold; text-align: center; padding: 2px; border-radius: 3px; width: 100%; }
 
-        .peq-graph-canvas { width: 100%; height: 100px; background: #040608; border: 1px solid var(--border-color); border-radius: 4px; display: block; margin-bottom: 8px; }
+        .peq-graph-canvas { width: 100%; height: 150px; background: #040608; border: 1px solid var(--border-color); border-radius: 4px; display: block; margin-bottom: 8px; }
 
         .delay-highlight { border: 1px solid rgba(255, 0, 127, 0.3) !important; background: #1a0d15 !important; }
         .filter-highlight { border: 1px solid rgba(0, 236, 255, 0.2) !important; background: #0a141c !important; }
@@ -395,6 +395,7 @@
 
     let audioCtx = null, audioSource = null, masterGainNode = null, nodeL = null, nodeR = null;
     let internalGenNode = null; 
+    let globalRenderReqId = null; // Penambahan flag untuk membatasi animasi render frame ganda
 
     const calculateGain = (db) => Math.pow(10, db / 20);
 
@@ -476,7 +477,6 @@
             let lpfR = parseInt(document.getElementById('lpf-r').value);
             nodeR.updateCrossover(hpfR, lpfR, document.getElementById('slope-r').value);
         }
-        drawRealtimePEQCurve();
     }
 
     function buildInterfaceAwal() {
@@ -499,11 +499,11 @@
                 <div class="peq-row-layout">
                     <div class="peq-field-item">
                         <label>Freq (Hz)</label>
-                        <input type="number" id="peq-f-l-${idx}" class="freq-input-box" value="${band.f}">
+                        <input type="number" id="peq-f-l-${idx}" class="freq-input-box peq-listener" value="${band.f}">
                     </div>
                     <div class="peq-field-item" style="flex: 2;">
                         <label>Gain Level</label>
-                        <input type="range" id="peq-g-l-${idx}" min="-15" max="15" step="0.5" value="${band.g}">
+                        <input type="range" id="peq-g-l-${idx}" class="peq-listener" min="-15" max="15" step="0.5" value="${band.g}">
                     </div>
                     <div class="peq-field-item" style="max-width: 65px;">
                         <label>dB Read</label>
@@ -511,7 +511,7 @@
                     </div>
                     <div class="peq-field-item">
                         <label>Q Factor</label>
-                        <input type="number" id="peq-q-l-${idx}" class="freq-input-box" step="0.1" value="${band.q}">
+                        <input type="number" id="peq-q-l-${idx}" class="freq-input-box peq-listener" step="0.1" value="${band.q}">
                     </div>
                 </div>
             `;
@@ -688,7 +688,7 @@
                         this.hpf1.Q.setValueAtTime(0.707, t); this.hpf2.Q.setValueAtTime(0.707, t); this.lpf1.Q.setValueAtTime(0.707, t); this.lpf2.Q.setValueAtTime(0.707, t);
                     } else if (slopeType === "bw48") {
                         if(!isHpfDeactivated) this.hpf2.type = "highpass"; if(!isLpfDeactivated) this.lpf2.type = "lowpass";
-                        this.hpf1.Q.setValueAtTime(1.0, t); this.lpf2.Q.setValueAtTime(1.0, t); this.lpf1.Q.setValueAtTime(1.0, t); this.lpf2.Q.setValueAtTime(1.0, t);
+                        this.hpf1.Q.setValueAtTime(1.0, t); this.lpf2.Q.setValueAtTime(1.0, t); this.lpf1.Q.setValueAtTime(1.0, t); this.lpf1.Q.setValueAtTime(1.0, t);
                     }
                 }
             }
@@ -733,7 +733,6 @@
                     }
                 }
             });
-            if(chKey === 'l') drawRealtimePEQCurve();
         }
 
         setMute(isMuted) {
@@ -765,67 +764,76 @@
         const W = canvas.width; const H = canvas.height;
         ctxRender.clearRect(0, 0, W, H);
 
+        const fMin = 20;
+        const fMax = 1000;
+
         ctxRender.strokeStyle = '#1c232a'; ctxRender.lineWidth = 1;
-        for (let fLine = 20; fLine <= 1000; fLine += 50) {
-            let x = Math.log10(fLine / 20) / Math.log10(1000 / 20) * W;
+        const gridFreqs = [20, 30, 40, 50, 70, 100, 150, 200, 300, 400, 500, 700, 1000];
+        gridFreqs.forEach(fLine => {
+            let x = Math.log10(fLine / fMin) / Math.log10(fMax / fMin) * W;
             ctxRender.beginPath(); ctxRender.moveTo(x, 0); ctxRender.lineTo(x, H); ctxRender.stroke();
-        }
+        });
         ctxRender.beginPath(); ctxRender.moveTo(0, H/2); ctxRender.lineTo(W, H/2); ctxRender.stroke();
 
         ctxRender.fillStyle = '#6e7681'; ctxRender.font = '10px Consolas';
         [20, 50, 100, 200, 500, 1000].forEach(lbl => {
-            let x = Math.log10(lbl / 20) / Math.log10(1000 / 20) * W;
+            let x = Math.log10(lbl / fMin) / Math.log10(fMax / fMin) * W;
             ctxRender.fillText(lbl + 'Hz', x + 2, H - 4);
         });
 
-        ctxRender.strokeStyle = '#00ecff'; ctxRender.lineWidth = 3; ctxRender.beginPath();
+        // 1. Perbaikan Eksekusi: Koefisien dihitung hanya per-band di luar loop canvas untuk menghindari beban memori.
+        const Fs = audioCtx ? audioCtx.sampleRate : 44100; 
+        let activeBands = [];
         
-        let peqBandsData = [];
-        for (let i = 0; i < 3; i++) {
-            let fEl = document.getElementById(`peq-f-l-${i}`);
-            let gEl = document.getElementById(`peq-g-l-${i}`);
-            let qEl = document.getElementById(`peq-q-l-${i}`);
-            if (fEl && gEl && qEl) {
-                peqBandsData.push({ f: parseFloat(fEl.value), g: parseFloat(gEl.value), q: parseFloat(qEl.value) });
+        if (!muteState.l.eq) {
+            for (let i = 0; i < 3; i++) {
+                if (!isProUser && i > 1) continue; 
+                
+                let fEl = document.getElementById(`peq-f-l-${i}`);
+                let gEl = document.getElementById(`peq-g-l-${i}`);
+                let qEl = document.getElementById(`peq-q-l-${i}`);
+                
+                if (fEl && gEl && qEl) {
+                    let g = parseFloat(gEl.value) || 0;
+                    if (g !== 0) {
+                        let f = Math.max(parseFloat(fEl.value) || fMin, 1);
+                        let q = Math.max(parseFloat(qEl.value) || 1.0, 0.1);
+                        
+                        let w0 = 2 * Math.PI * f / Fs;
+                        let alpha = Math.sin(w0) / (2 * q);
+                        let A = Math.pow(10, g / 40);
+                        
+                        activeBands.push({
+                            b0: 1 + alpha * A, b1: -2 * Math.cos(w0), b2: 1 - alpha * A,
+                            a0: 1 + alpha / A, a1: -2 * Math.cos(w0), a2: 1 - alpha / A
+                        });
+                    }
+                }
             }
         }
 
-        if(muteState.l.eq) peqBandsData = []; 
-
-        const Fs = 44100; 
+        ctxRender.strokeStyle = '#00ecff'; ctxRender.lineWidth = 3; ctxRender.beginPath();
+        
         for (let px = 0; px < W; px++) {
             let logPerc = px / W;
-            let currentFreq = 20 * Math.pow(1000 / 20, logPerc);
+            let currentFreq = fMin * Math.pow(fMax / fMin, logPerc);
             let totalGainDb = 0;
+            
+            let w = 2 * Math.PI * currentFreq / Fs;
+            let cosW = Math.cos(w);
+            let cos2W = Math.cos(2 * w);
 
-            peqBandsData.forEach(b => {
-                if (b.g === 0) return;
+            activeBands.forEach(band => {
+                let num = (band.b0*band.b0 + band.b1*band.b1 + band.b2*band.b2) + 2*(band.b0*band.b1 + band.b1*band.b2)*cosW + 2*band.b0*band.b2*cos2W;
+                let den = (band.a0*band.a0 + band.a1*band.a1 + band.a2*band.a2) + 2*(band.a0*band.a1 + band.a1*band.a2)*cosW + 2*band.a0*band.a2*cos2W;
                 
-                let w0 = 2 * Math.PI * b.f / Fs;
-                let alpha = Math.sin(w0) / (2 * Math.max(b.q, 0.01));
-                let A = Math.pow(10, b.g / 40);
-
-                let b0 = 1 + alpha * A;
-                let b1 = -2 * Math.cos(w0);
-                let b2 = 1 - alpha * A;
-                let a0 = 1 + alpha / A;
-                let a1 = -2 * Math.cos(w0);
-                let a2 = 1 - alpha / A;
-
-                let w = 2 * Math.PI * currentFreq / Fs;
-                let cosW = Math.cos(w);
-                let cos2W = Math.cos(2 * w);
-
-                let num = (b0*b0 + b1*b1 + b2*b2) + 2*(b0*b1 + b1*b2)*cosW + 2*b0*b2*cos2W;
-                let den = (a0*a0 + a1*a1 + a2*a2) + 2*(a0*a1 + a1*a2)*cosW + 2*a0*a2*cos2W;
-                
-                if (den > 0.00001) {
-                    let gainAtFreq = 10 * Math.log10(num / den);
-                    if (!isNaN(gainAtFreq)) totalGainDb += gainAtFreq;
-                }
+                // 2. Safeguard Float: Cegah glitch path jika num/den bernilai NaN
+                let val = num / den;
+                if (val < 1e-10) val = 1e-10; 
+                totalGainDb += 10 * Math.log10(val);
             });
 
-            let y = (H / 2) - (totalGainDb * (H / 30)); 
+            let y = (H / 2) - (totalGainDb * (H / 34)); 
             if (px === 0) ctxRender.moveTo(px, y); else ctxRender.lineTo(px, y);
         }
         ctxRender.stroke();
@@ -949,15 +957,24 @@
         });
         document.getElementById('slope-l').addEventListener('change', updateCHL);
 
-        document.getElementById('peq-sliders-l').addEventListener('input', function(e) {
-            if (!e.target) return; const idParts = e.target.id.split('-');
+        const peqContainerL = document.getElementById('peq-sliders-l');
+        peqContainerL.addEventListener('input', function(e) {
+            if (!e.target || !e.target.classList.contains('peq-listener')) return; 
+            const idParts = e.target.id.split('-');
+            const idx = parseInt(idParts[3]);
+            
             if(idParts[1] === 'g') {
-                let idx = parseInt(idParts[3]); let val = parseFloat(e.target.value);
+                let val = parseFloat(e.target.value);
                 document.getElementById(`peq-g-val-l-${idx}`).innerText = val.toFixed(1) + " dB";
             }
-            if (nodeL) nodeL.updateEQGains(); else drawRealtimePEQCurve();
+            if (nodeL) nodeL.updateEQGains();
+            drawRealtimePEQCurve(); 
         });
-        document.getElementById('peq-sliders-l').addEventListener('change', function() { if(nodeL) nodeL.updateEQGains(); });
+        
+        peqContainerL.addEventListener('change', function(e) { 
+            if (nodeL) nodeL.updateEQGains();
+            drawRealtimePEQCurve();
+        });
 
         document.getElementById('eq-sliders-r').addEventListener('input', function(e) {
             if (e.target && e.target.type === 'range') {
@@ -1010,7 +1027,7 @@
         document.getElementById('lim-mute-l').addEventListener('click', function() { muteState.l.limMute = !muteState.l.limMute; this.classList.toggle('active', muteState.l.limMute); this.innerText = muteState.l.limMute ? "LIMIT BYPASS" : "LIMIT MUTE"; if(nodeL) nodeL.updateLimiterHardware(); });
         document.getElementById('lim-mute-r').addEventListener('click', function() { muteState.r.limMute = !muteState.r.limMute; this.classList.toggle('active', muteState.r.limMute); this.innerText = muteState.r.limMute ? "LIMIT BYPASS" : "LIMIT MUTE"; if(nodeR) nodeR.updateLimiterHardware(); });
 
-        document.getElementById('mute-eq-l').addEventListener('click', function() { muteState.l.eq = !muteState.l.eq; this.classList.toggle('active', muteState.l.eq); this.innerText = muteState.l.eq ? "PEQ BYPASSED" : "BYPASS PEQ"; if(nodeL) nodeL.updateEQGains(); else drawRealtimePEQCurve(); });
+        document.getElementById('mute-eq-l').addEventListener('click', function() { muteState.l.eq = !muteState.l.eq; this.classList.toggle('active', muteState.l.eq); this.innerText = muteState.l.eq ? "PEQ BYPASSED" : "BYPASS PEQ"; if(nodeL) nodeL.updateEQGains(); drawRealtimePEQCurve(); });
         document.getElementById('mute-eq-r').addEventListener('click', function() { muteState.r.eq = !muteState.r.eq; this.classList.toggle('active', muteState.r.eq); this.innerText = muteState.r.eq ? "GEQ BYPASSED" : "BYPASS GEQ"; if(nodeR) nodeR.updateEQGains(); });
 
         document.getElementById('reset-eq-l').addEventListener('click', function() {
@@ -1020,7 +1037,8 @@
                     document.getElementById(`peq-q-l-${idx}`).value = band.q; document.getElementById(`peq-g-val-l-${idx}`).innerText = "0.0 dB";
                 }
             });
-            if (nodeL) nodeL.updateEQGains(); else drawRealtimePEQCurve();
+            if (nodeL) nodeL.updateEQGains();
+            drawRealtimePEQCurve();
         });
         document.getElementById('reset-eq-r').addEventListener('click', function() {
             eqFreqsR.forEach((_, idx) => { const slider = document.getElementById(`eq-r-${idx}`); if (slider) { if(!isProUser && idx > 4) return; slider.value = 0; document.getElementById(`eq-val-r-${idx}`).innerText = "0dB"; } });
@@ -1077,7 +1095,8 @@
             document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
             const targetMode = preset.currentMode || "off"; const activeBtn = document.querySelector(`.btn-mode[data-mode="${targetMode}"]`); if(activeBtn) activeBtn.classList.add('active');
             currentMode = targetMode;
-            if(audioCtx && nodeL && nodeR) { applyCurrentMode(); syncAllHardwareSlidersToDSP(); } else { drawRealtimePEQCurve(); }
+            if(audioCtx && nodeL && nodeR) { applyCurrentMode(); syncAllHardwareSlidersToDSP(); }
+            drawRealtimePEQCurve();
         });
 
         document.getElementById('btn-delete-preset').addEventListener('click', () => {
@@ -1091,8 +1110,12 @@
         });
     }
 
+    // 3. Perbaikan Eksekusi: Pembatasan Frame Tunggal untuk Mencegah Render Overlap
     function processRealtimeVUMeters() {
-        if (!nodeL || !nodeR) return;
+        if (globalRenderReqId) {
+            cancelAnimationFrame(globalRenderReqId); // Hentikan loop yang berjalan sebelumnya agar tidak tumpang tindih
+        }
+        
         const runAnalysis = (engineObj, chLabel, txtObj) => {
             if (!engineObj || !engineObj.analyser || !audioCtx || audioCtx.state !== "running") return;
             const dataArray = new Uint8Array(engineObj.analyser.frequencyBinCount); engineObj.analyser.getByteTimeDomainData(dataArray); 
@@ -1110,12 +1133,25 @@
             const ledContainer = document.getElementById(`vu-${chLabel}`);
             if (ledContainer) { const ledNodes = ledContainer.children; for(let i=0; i<totalLeds; i++) { if(ledNodes[i]) { if(i < activeLeds) ledNodes[i].classList.add('active'); else ledNodes[i].classList.remove('active'); } } }
         };
-        function renderFrame() { if(nodeL && nodeR && audioCtx && audioCtx.state === "running") { runAnalysis(nodeL, 'l', document.getElementById('db-txt-l')); runAnalysis(nodeR, 'r', document.getElementById('db-txt-r')); } requestAnimationFrame(renderFrame); }
+        
+        function renderFrame() { 
+            drawRealtimePEQCurve();
+            
+            if(nodeL && nodeR && audioCtx && audioCtx.state === "running") { 
+                runAnalysis(nodeL, 'l', document.getElementById('db-txt-l')); 
+                runAnalysis(nodeR, 'r', document.getElementById('db-txt-r')); 
+            } 
+            globalRenderReqId = requestAnimationFrame(renderFrame); 
+        }
         renderFrame();
     }
 
     buildInterfaceAwal(); 
     connectUIElements();
+    
+    setTimeout(() => {
+        processRealtimeVUMeters();
+    }, 50);
 
     const pemicuAmanAndroid = () => {
         if (!audioCtx) { initSystemAudio(); }
