@@ -101,7 +101,6 @@
         .eq-header-block { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
         .eq-title { font-size: 0.75rem; color: #8b9bb4; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
         
-        /* HORIZONTAL SCROLL ORIGINAL SANGAR UNTUK GEQ UNTUK CH R */
         .eq-wrapper { display: flex; gap: 5px; position: relative; height: 200px; padding-top: 5px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--accent-green) #070a0e; }
         .eq-wrapper::-webkit-scrollbar { height: 5px; }
         .eq-wrapper::-webkit-scrollbar-thumb { background: var(--accent-green); border-radius: 3px; }
@@ -111,7 +110,6 @@
         .eq-ch .eq-freq-lbl { font-size: 0.55rem; color: #8b9bb4; transform: rotate(-40deg); display: inline-block; white-space: nowrap; font-weight: bold; margin-top: 12px; }
         .eq-ch .eq-rt-val { font-size: 0.55rem; color: var(--accent-green); font-weight: bold; display: block; height: 12px; text-align: center; line-height: 12px; }
 
-        /* KHUSUS PEQ FIELD LAYOUT */
         .peq-input-wrap { display: flex; flex-direction: column; gap: 2px; width: 100%; background: #0b0e12; padding: 6px; border: 1px solid #21262d; border-radius: 4px; margin-top: 8px; }
         .peq-row-layout { display: flex; justify-content: space-between; gap: 5px; align-items: center; }
         .peq-title-sub { font-size: 0.65rem; color: var(--accent-blue); font-weight: bold; margin-bottom: 2px; }
@@ -119,7 +117,6 @@
         .peq-field-item label { font-size: 0.55rem; color: #6e7681; }
         .peq-box-val { background: #040608; border: 1px solid #3a4756; color: #fff; font-size: 0.7rem; font-weight: bold; text-align: center; padding: 2px; border-radius: 3px; width: 100%; }
 
-        /* CANVAS UNTUK REALTIME PEQ GRAPH CURVE */
         .peq-graph-canvas { width: 100%; height: 100px; background: #040608; border: 1px solid var(--border-color); border-radius: 4px; display: block; margin-bottom: 8px; }
 
         .delay-highlight { border: 1px solid rgba(255, 0, 127, 0.3) !important; background: #1a0d15 !important; }
@@ -356,10 +353,12 @@
     </div>
 </div>
 
+<!-- SINGLE SCRIPT TYPE MODULE: MENJAMIN LIFECYCLE BERURUTAN & TIDAK RACE CONDITION -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
     import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
+    // 1. Firebase Config & Initialization
     const firebaseConfig = {
         apiKey: "AIzaSyA7Rzfvjrw-OZe7Qh7W9nxkr1EUq6vnqDM",
         authDomain: "ad-audio-dlms.firebaseapp.com",
@@ -374,28 +373,13 @@
     const app = initializeApp(firebaseConfig);
     const database = getDatabase(app);
 
+    // Bind ke scope window agar global scope aman jika dibutuhkan module lain
     window.fbDatabase = database;
     window.fbRef = ref;
     window.fbGet = get;
     window.fbSet = set;
 
-    const localSavedKey = localStorage.getItem('aji_audio_saved_key');
-    if (localSavedKey) {
-        document.getElementById('input-license-key').value = localSavedKey;
-        if (typeof window.checkLicenseOnline === "function") {
-            window.checkLicenseOnline(localSavedKey);
-        }
-    }
-
-    document.getElementById('btn-activate-license').addEventListener('click', () => {
-        const k = document.getElementById('input-license-key').value.trim();
-        if(k) { if(window.checkLicenseOnline) window.checkLicenseOnline(k); } else { alert("Masukkan key terlebih dahulu!"); }
-    });
-</script>
-
-<script>
-    window.checkLicenseOnline = checkLicenseOnline;
-
+    // 2. Global State & App Logic
     let isProUser = false; 
     let countdownInterval = null; 
 
@@ -442,6 +426,7 @@
     function triggerActivationNotice() {
         alert("🔒 PRO VERSION EXCLUSIVE\n\nFitur ini terkunci. Hubungi AD AUDIO PRODUCTION / AJI LUMAJANG untuk membeli lisensi penuh Pro Engine.");
     }
+    window.triggerActivationNotice = triggerActivationNotice; // Bind ke global window untuk onclick HTML
 
     function applyVisualLocks() {
         if (!isProUser) {
@@ -567,7 +552,7 @@
         const countdownDisp = document.getElementById('license-countdown-disp');
         const targetDate = new Date(expiredDateStr).getTime();
 
-        countdownInterval = setInterval(() => {
+        countdownInterval = setInterval(async () => {
             const sekarang = new Date().getTime(); const selisih = targetDate - sekarang;
             if (selisih <= 0) {
                 clearInterval(countdownInterval); isProUser = false;
@@ -583,10 +568,10 @@
     }
 
     async function checkLicenseOnline(key) {
-        if(!key || !window.fbDatabase) return;
+        if(!key || !database) return;
         try {
-            const keyRef = window.fbRef(window.fbDatabase, 'activation_keys/' + key);
-            const snapshot = await window.fbGet(keyRef);
+            const keyRef = ref(database, 'activation_keys/' + key);
+            const snapshot = await get(keyRef);
             if (snapshot.exists()) {
                 const data = snapshot.val(); let expiredDateStr = data.expired_date;
                 const expiredDate = new Date(expiredDateStr); const hariIni = await dapatkanWaktuOnlineAkurat();
@@ -598,6 +583,8 @@
                     applyVisualLocks(); mulaiHitungMundur(expiredDateStr);
                     if(audioCtx && nodeL && nodeR) { syncAllHardwareSlidersToDSP(); }
                 }
+            } else {
+                alert("Lisensi tidak valid!");
             }
         } catch (error) { console.error(error); }
     }
@@ -705,7 +692,7 @@
                         this.hpf1.Q.setValueAtTime(0.707, t); this.hpf2.Q.setValueAtTime(0.707, t); this.lpf1.Q.setValueAtTime(0.707, t); this.lpf2.Q.setValueAtTime(0.707, t);
                     } else if (slopeType === "bw48") {
                         if(!isHpfDeactivated) this.hpf2.type = "highpass"; if(!isLpfDeactivated) this.lpf2.type = "lowpass";
-                        this.hpf1.Q.setValueAtTime(1.0, t); this.hpf2.Q.setValueAtTime(1.0, t); this.lpf1.Q.setValueAtTime(1.0, t); this.lpf2.Q.setValueAtTime(1.0, t);
+                        this.hpf1.Q.setValueAtTime(1.0, t); this.lpf2.Q.setValueAtTime(1.0, t); this.lpf1.Q.setValueAtTime(1.0, t); this.lpf2.Q.setValueAtTime(1.0, t);
                     }
                 }
             }
@@ -736,7 +723,7 @@
                         let qInput = document.getElementById(`peq-q-l-${idx}`);
                         if(fInput && gSlider && qInput) {
                             let fVal = parseFloat(fInput.value); let qVal = parseFloat(qInput.value);
-                            if (isNaN(fVal) || fVal < 20) fVal = 20; if (fVal > 1000) fVal = 1000; // Dikunci max 1kHz karena ini Sub/Low Engine
+                            if (isNaN(fVal) || fVal < 20) fVal = 20; if (fVal > 1000) fVal = 1000; 
                             if (isNaN(qVal) || qVal < 0.1) qVal = 0.1; if (qVal > 20) qVal = 20;
                             eq.frequency.setTargetAtTime(fVal, this.ctx.currentTime, 0.02);
                             eq.gain.setTargetAtTime(parseFloat(gSlider.value), this.ctx.currentTime, 0.02);
@@ -776,14 +763,12 @@
         }
     }
 
-    // LOGIKA MATEMATIS & VISUALISASI CANVAS KURVA RESPON FREKUENSI PEQ CHANNEL L
     function drawRealtimePEQCurve() {
         const canvas = document.getElementById('peq-graph-l'); if (!canvas) return;
         const ctxRender = canvas.getContext('2d');
         const W = canvas.width; const H = canvas.height;
         ctxRender.clearRect(0, 0, W, H);
 
-        // Grid Background Latar Belakang Audio Analog
         ctxRender.strokeStyle = '#1c232a'; ctxRender.lineWidth = 1;
         for (let fLine = 20; fLine <= 1000; fLine += 50) {
             let x = Math.log10(fLine / 20) / Math.log10(1000 / 20) * W;
@@ -791,14 +776,12 @@
         }
         ctxRender.beginPath(); ctxRender.moveTo(0, H/2); ctxRender.lineTo(W, H/2); ctxRender.stroke();
 
-        // Teks Label Frekuensi Garis Bawah
         ctxRender.fillStyle = '#6e7681'; ctxRender.font = '10px Consolas';
         [20, 50, 100, 200, 500, 1000].forEach(lbl => {
             let x = Math.log10(lbl / 20) / Math.log10(1000 / 20) * W;
             ctxRender.fillText(lbl + 'Hz', x + 2, H - 4);
         });
 
-        // Hitung Respon Akumulasi Magnitudo 3-Band PEQ secara Realtime
         ctxRender.strokeStyle = 'var(--accent-blue)'; ctxRender.lineWidth = 3; ctxRender.beginPath();
         
         let peqBandsData = [];
@@ -811,7 +794,7 @@
             }
         }
 
-        if(muteState.l.eq) peqBandsData = []; // Kosongkan kurva jika di-bypass
+        if(muteState.l.eq) peqBandsData = []; 
 
         for (let px = 0; px < W; px++) {
             let logPerc = px / W;
@@ -821,10 +804,9 @@
             peqBandsData.forEach(b => {
                 if (b.g === 0) return;
                 let w0 = 2 * Math.PI * b.f; let w = 2 * Math.PI * currentFreq;
-                let alpha = Math.sin(w / 44100) / (2 * b.q); // Fallback standard sampling 44.1kHz
+                let alpha = Math.sin(w / 44100) / (2 * b.q); 
                 let A = Math.pow(10, b.g / 40);
                 
-                // Formulasi filter digital peaking EQ
                 let num = Math.pow(w0, 2) - Math.pow(w, 2);
                 let den = Math.pow(w0, 2) - Math.pow(w, 2);
                 let mag = Math.sqrt((Math.pow(num,2) + Math.pow(w0*w*alpha*A,2)) / (Math.pow(den,2) + Math.pow(w0*w*alpha/A,2)));
@@ -832,7 +814,6 @@
                 if(!isNaN(gainAtFreq)) totalGainDb += gainAtFreq;
             });
 
-            // Normalisasi posisi Y desibel ke area pixel koordinat canvas
             let y = (H / 2) - (totalGainDb * (H / 30)); 
             if (px === 0) ctxRender.moveTo(px, y); else ctxRender.lineTo(px, y);
         }
@@ -955,7 +936,6 @@
         });
         document.getElementById('slope-l').addEventListener('change', updateCHL);
 
-        // REALTIME GRAPH RE-DRAW EVENT UNTUK PARAMETRIC EQ SLIDERS & INPUTS CH L
         document.getElementById('peq-sliders-l').addEventListener('input', function(e) {
             if (!e.target) return; const idParts = e.target.id.split('-');
             if(idParts[1] === 'g') {
@@ -1091,6 +1071,11 @@
             const selectEl = document.getElementById('select-local-preset'); const namaPreset = selectEl.value; if(!namaPreset) return;
             if(!confirm(`Hapus preset "${namaPreset}"?`)) return; const semuaPreset = dapatkanPresetLokalSemua(); delete semuaPreset[namaPreset]; simpanPresetLokalSemua(semuaPreset); perbaruiDaftarPresetLokal(); alert("Preset dihapus.");
         });
+
+        document.getElementById('btn-activate-license').addEventListener('click', () => {
+            const k = document.getElementById('input-license-key').value.trim();
+            if(k) { checkLicenseOnline(k); } else { alert("Masukkan key terlebih dahulu!"); }
+        });
     }
 
     function processRealtimeVUMeters() {
@@ -1116,7 +1101,15 @@
         renderFrame();
     }
 
-    buildInterfaceAwal(); connectUIElements();
+    // 3. App Initialization Lifecycle Trigger
+    buildInterfaceAwal(); 
+    connectUIElements();
+
+    const localSavedKey = localStorage.getItem('aji_audio_saved_key');
+    if (localSavedKey) {
+        document.getElementById('input-license-key').value = localSavedKey;
+        checkLicenseOnline(localSavedKey);
+    }
 
     document.getElementById('audio-file').addEventListener('change', (e) => {
         const file = e.target.files[0]; if (!file) return; audioPlayer.src = URL.createObjectURL(file);
