@@ -760,13 +760,19 @@
                 const parsedRelative = parseRelativeTime(expiredDateStr, hariIni);
                 
                 if (parsedRelative) {
-                    // Jika data berformat "30hari", set waktu pasti
-                    expiredDate = parsedRelative;
-                    expiredDateStr = parsedRelative.toISOString();
-                    updatePayload.expired_date = expiredDateStr;
-                    updatePayload.status = "active"; // Mengunci status 
-                    needsDbUpdate = true;
-                } else {
+    // Jika data berformat "30hari", set waktu pasti
+    expiredDate = parsedRelative;
+    expiredDateStr = parsedRelative.toISOString();
+    updatePayload.expired_date = expiredDateStr;
+    
+    // --- TAMBAHKAN BARIS INI ---
+    updatePayload.expired_timestamp = expiredDate.getTime(); 
+    // ---------------------------
+    
+    updatePayload.status = "active"; // Mengunci status 
+    needsDbUpdate = true;
+}
+ else {
                     expiredDate = new Date(expiredDateStr);
                     if (isNaN(expiredDate.getTime())) {
                         alert("Format tanggal kadaluarsa dari server tidak dikenali.");
