@@ -476,11 +476,10 @@
     }
     const ID_PERANGKAT_SEKARANG = ambilAtauBuatDeviceId();
 
-    // PERBAIKAN BUG: Penambahan timeout/abort agar tidak freeze saat API Timezone lambat
     async function dapatkanWaktuOnlineAkurat() {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 detik batas tunggu
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
             const respon = await fetch('https://worldtimeapi.org/api/timezone/Asia/Jakarta', { signal: controller.signal });
             clearTimeout(timeoutId);
             if (respon.ok) {
@@ -493,10 +492,8 @@
         return new Date();
     }
 
-    // PERBAIKAN BUG: String parsing diamankan, unit ditambah, format ketat.
     function parseRelativeTime(str, baseDate) {
         if (!str) return null;
-        // Konversi paksa ke String agar angka `1` atau `2` tidak merusak fungsi .toLowerCase()
         const cleanStr = String(str).toLowerCase().replace(/\s+/g, '');
         const match = cleanStr.match(/^(\d+)(detik|menit|jam|hari|minggu|bulan|tahun)$/);
         
@@ -695,15 +692,26 @@
 
         countdownInterval = setInterval(async () => {
             const sekarang = new Date().getTime(); const selisih = targetDate - sekarang;
+            
             if (selisih <= 0) {
                 clearInterval(countdownInterval); isProUser = false;
                 countdownDisp.innerHTML = "❌ MASA AKTIF HABIS! SILAKAN UPGRADE";
                 
                 countdownDisp.classList.remove('active-glow');
                 countdownDisp.classList.add('expired-glow');
+                applyVisualLocks(); 
                 
-                applyVisualLocks(); return;
+                // --- FIX: MENGUNCI LISENSI DI DATABASE SAAT WAKTU HABIS ---
+                const savedKey = localStorage.getItem('aji_audio_saved_key');
+                if (savedKey && window.fbDatabase) {
+                    const keyRef = window.fbRef(window.fbDatabase, 'activation_keys/' + savedKey);
+                    window.fbUpdate(keyRef, { status: "expired" }).catch(() => console.warn("Gagal update status kedaluwarsa ke database"));
+                }
+                // -----------------------------------------------------------
+                
+                return;
             }
+            
             const hari = Math.floor(selisih / (1000 * 60 * 60 * 24));
             const jam = Math.floor((selisih % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const menit = Math.floor((selisih % (1000 * 60 * 60)) / (1000 * 60));
@@ -713,7 +721,6 @@
         }, 1000);
     }
 
-    // PERBAIKAN BUG: Anti Drama Blokir Update Firebase & Pencegahan Bug new Date()
     async function checkLicenseOnline(key) {
         if(!key || !window.fbDatabase) return;
         try {
@@ -722,11 +729,11 @@
             
             if (snapshot.exists()) {
                 const data = snapshot.val(); 
-                // Pastikan dibaca sebagai string untuk mencegah kecelakaan jika terbaca integer/angka
                 let expiredDateStr = String(data.expired_date || "").trim();
 
-                if (data.status === "banned") { 
-                    alert("Lisensi ini telah diblokir oleh administrator!");
+                // --- FIX: TAMBAHKAN CEK STATUS EXPIRED ---
+                if (data.status === "banned" || data.status === "expired") { 
+                    alert("Lisensi ini telah diblokir atau sudah kadaluarsa!");
                     isProUser = false; applyVisualLocks(); return; 
                 }
                 
@@ -736,7 +743,6 @@
                         isProUser = false; applyVisualLocks(); return; 
                     }
                 } else {
-                    // Try-Catch ditambahkan: Jika Rules Firebase 'write: false', script tidak akan crash dan tetap bisa login.
                     try { 
                         await window.fbUpdate(keyRef, { device_id: ID_PERANGKAT_SEKARANG }); 
                     } catch(e) { console.warn("Peringatan: Gagal mengunci Device ID ke Firebase (Mungkin ditolak aturan Write), aktivasi diteruskan..."); }
@@ -750,20 +756,16 @@
                 const hariIni = await dapatkanWaktuOnlineAkurat();
                 let expiredDate;
 
-                // LOGIKA BARU: Cek format RELATIF (1menit / 1tahun) LEBIH DULU sebelum dikonversi new Date()
                 const parsedRelative = parseRelativeTime(expiredDateStr, hariIni);
                 
                 if (parsedRelative) {
-                    // Berhasil terbaca format relatif ("1menit")
                     expiredDate = parsedRelative;
                     expiredDateStr = parsedRelative.toISOString(); 
                     
                     try { 
-                        // Update ke bentuk absolut ISO, gagal pun tak masalah untuk sesi saat ini
                         await window.fbUpdate(keyRef, { expired_date: expiredDateStr }); 
                     } catch(e) { console.warn("Peringatan: Gagal mengubah string format waktu di Firebase."); }
                 } else {
-                    // Jika tidak cocok dengan pola relatif, baca sebagai standar Tanggal Absolut/ISO (ex: 2024-12...)
                     expiredDate = new Date(expiredDateStr);
                     if (isNaN(expiredDate.getTime())) {
                         alert("Format tanggal kadaluarsa dari server tidak dikenali (Gunakan 1menit, 2jam, dll atau Format ISO).");
@@ -771,7 +773,6 @@
                     }
                 }
 
-                // Cek masa aktif
                 if (hariIni.getTime() > expiredDate.getTime()) { 
                     alert("Masa aktif lisensi Anda telah habis!");
                     isProUser = false; applyVisualLocks(); 
@@ -780,6 +781,10 @@
                     countdownDisp.innerHTML = "❌ MASA AKTIF HABIS! SILAKAN UPGRADE";
                     countdownDisp.classList.remove('active-glow');
                     countdownDisp.classList.add('expired-glow');
+                    
+                    // --- FIX: TANDAI KEDALUWARSA SAAT DICEK ---
+                    window.fbUpdate(keyRef, { status: "expired" }).catch(() => console.warn("Gagal menandai lisensi expired di DB."));
+                    // -----------------------------------------
                 } else {
                     isProUser = true; 
                     localStorage.setItem('aji_audio_saved_key', key);
