@@ -701,14 +701,11 @@
                 countdownDisp.classList.add('expired-glow');
                 applyVisualLocks(); 
                 
-                // --- FIX: MENGUNCI LISENSI DI DATABASE SAAT WAKTU HABIS ---
                 const savedKey = localStorage.getItem('aji_audio_saved_key');
                 if (savedKey && window.fbDatabase) {
                     const keyRef = window.fbRef(window.fbDatabase, 'activation_keys/' + savedKey);
                     window.fbUpdate(keyRef, { status: "expired" }).catch(() => console.warn("Gagal update status kedaluwarsa ke database"));
                 }
-                // -----------------------------------------------------------
-                
                 return;
             }
             
@@ -721,6 +718,7 @@
         }, 1000);
     }
 
+    // --- FUNGSI UTAMA YANG TELAH DIPERBAIKI (BUG FIX) ---
     async function checkLicenseOnline(key) {
         if(!key || !window.fbDatabase) return;
         try {
@@ -730,22 +728,18 @@
             if (snapshot.exists()) {
                 const data = snapshot.val(); 
                 let expiredDateStr = String(data.expired_date || "").trim();
+                let currentStatus = data.status || "active";
 
-                // --- FIX: TAMBAHKAN CEK STATUS EXPIRED ---
-                if (data.status === "banned" || data.status === "expired") { 
+                // Validasi status mutlak
+                if (currentStatus === "banned" || currentStatus === "expired") { 
                     alert("Lisensi ini telah diblokir atau sudah kadaluarsa!");
                     isProUser = false; applyVisualLocks(); return; 
                 }
                 
-                if (data.device_id) {
-                    if (data.device_id !== ID_PERANGKAT_SEKARANG) { 
-                        alert("Lisensi ini sudah digunakan pada perangkat lain!");
-                        isProUser = false; applyVisualLocks(); return; 
-                    }
-                } else {
-                    try { 
-                        await window.fbUpdate(keyRef, { device_id: ID_PERANGKAT_SEKARANG }); 
-                    } catch(e) { console.warn("Peringatan: Gagal mengunci Device ID ke Firebase (Mungkin ditolak aturan Write), aktivasi diteruskan..."); }
+                // Validasi Device ID
+                if (data.device_id && data.device_id !== ID_PERANGKAT_SEKARANG) {
+                    alert("Lisensi ini sudah digunakan pada perangkat lain!");
+                    isProUser = false; applyVisualLocks(); return;
                 }
 
                 if (!expiredDateStr || expiredDateStr === "undefined") {
@@ -755,20 +749,38 @@
                 
                 const hariIni = await dapatkanWaktuOnlineAkurat();
                 let expiredDate;
+                let needsDbUpdate = false;
+                let updatePayload = {};
+
+                if (!data.device_id) {
+                    updatePayload.device_id = ID_PERANGKAT_SEKARANG;
+                    needsDbUpdate = true;
+                }
 
                 const parsedRelative = parseRelativeTime(expiredDateStr, hariIni);
                 
                 if (parsedRelative) {
+                    // Jika data berformat "30hari", set waktu pasti
                     expiredDate = parsedRelative;
-                    expiredDateStr = parsedRelative.toISOString(); 
-                    
-                    try { 
-                        await window.fbUpdate(keyRef, { expired_date: expiredDateStr }); 
-                    } catch(e) { console.warn("Peringatan: Gagal mengubah string format waktu di Firebase."); }
+                    expiredDateStr = parsedRelative.toISOString();
+                    updatePayload.expired_date = expiredDateStr;
+                    updatePayload.status = "active"; // Mengunci status 
+                    needsDbUpdate = true;
                 } else {
                     expiredDate = new Date(expiredDateStr);
                     if (isNaN(expiredDate.getTime())) {
-                        alert("Format tanggal kadaluarsa dari server tidak dikenali (Gunakan 1menit, 2jam, dll atau Format ISO).");
+                        alert("Format tanggal kadaluarsa dari server tidak dikenali.");
+                        isProUser = false; applyVisualLocks(); return;
+                    }
+                }
+
+                // BLOKADE KEAMANAN: Memaksa DB Write sebelum memberikan PRO
+                if (needsDbUpdate) {
+                    try {
+                        await window.fbUpdate(keyRef, updatePayload);
+                    } catch (e) {
+                        console.error("Gagal update aktivasi ke Firebase:", e);
+                        alert("Gagal mengaktifkan lisensi! Pastikan koneksi internet stabil dan server merespon permintaan pembaruan.");
                         isProUser = false; applyVisualLocks(); return;
                     }
                 }
@@ -782,10 +794,14 @@
                     countdownDisp.classList.remove('active-glow');
                     countdownDisp.classList.add('expired-glow');
                     
-                    // --- FIX: TANDAI KEDALUWARSA SAAT DICEK ---
-                    window.fbUpdate(keyRef, { status: "expired" }).catch(() => console.warn("Gagal menandai lisensi expired di DB."));
-                    // -----------------------------------------
+                    // Kunci sebagai expired selamanya
+                    try {
+                        await window.fbUpdate(keyRef, { status: "expired" });
+                    } catch(e) {
+                        console.warn("Gagal menandai lisensi expired di DB.");
+                    }
                 } else {
+                    // Sukses diberikan hak akses jika waktu belum lewat & update payload berhasil
                     isProUser = true; 
                     localStorage.setItem('aji_audio_saved_key', key);
                     applyVisualLocks(); 
@@ -803,6 +819,7 @@
             alert("Gagal terhubung ke server verifikasi. Periksa koneksi internet Anda atau setelan database Firebase.");
         }
     }
+    // ----------------------------------------------------
 
     const audioPlayer = document.getElementById('audio-player');
 
@@ -1257,9 +1274,6 @@
         });
 
         const checkLimiterLock = (elId, defaultVal) => { if (!isProUser) { document.getElementById(elId).value = defaultVal; triggerActivationNotice(); return false; } return true; };
-        document.getElementById('lim-thold-l').addEventListener('input', (e) => { if(checkLimiterLock('lim-thold-l', -1.0)) { document.getElementById('lim-thold-disp-l').innerText = parseFloat(e.target.value).toFixed(1) + " dB"; if(nodeL) nodeL.updateLimiterHardware(); } });
-        document.getElementById('lim-atk-l').addEventListener('input', (e) => { if(checkLimiterLock('lim-atk-l', 30)) { document.getElementById('lim-atk-disp-l').innerText = e.target.value + " ms"; if(nodeL) nodeL.updateLimiterHardware(); } });
-        document.getElementById('lim-rel-l').addEventListener('input', (e) => { if(checkLimiterLock('lim-rel-l', 500)) { document.getElementById('lim-rel-disp-l').innerText = e.target.value + " ms"; if(nodeL) nodeL.updateLimiterHardware(); } });
         document.getElementById('lim-thold-r').addEventListener('input', (e) => { if(checkLimiterLock('lim-thold-r', -3.0)) { document.getElementById('lim-thold-disp-r').innerText = parseFloat(e.target.value).toFixed(1) + " dB"; if(nodeR) nodeR.updateLimiterHardware(); } });
         document.getElementById('lim-atk-r').addEventListener('input', (e) => { if(checkLimiterLock('lim-atk-r', 3)) { document.getElementById('lim-atk-disp-r').innerText = e.target.value + " ms"; if(nodeR) nodeR.updateLimiterHardware(); } });
         document.getElementById('lim-rel-r').addEventListener('input', (e) => { if(checkLimiterLock('lim-rel-r', 60)) { document.getElementById('lim-rel-disp-r').innerText = e.target.value + " ms"; if(nodeR) nodeR.updateLimiterHardware(); } });
