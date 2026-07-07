@@ -136,7 +136,6 @@
         .license-inputs { display: flex; gap: 8px; align-items: center; }
         .license-box input { flex: 1; background: #111418; border: 1px solid #323942; color: #fff; padding: 6px; font-size: 0.75rem; border-radius: 3px; font-weight: bold; }
         
-        /* PERBAIKAN: Desain Kolom Expired Date */
         .license-countdown { 
             font-size: 0.75rem; 
             color: #8b9bb4; 
@@ -477,29 +476,40 @@
     }
     const ID_PERANGKAT_SEKARANG = ambilAtauBuatDeviceId();
 
+    // PERBAIKAN BUG: Penambahan timeout/abort agar tidak freeze saat API Timezone lambat
     async function dapatkanWaktuOnlineAkurat() {
         try {
-            const respon = await fetch('https://worldtimeapi.org/api/timezone/Asia/Jakarta');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 detik batas tunggu
+            const respon = await fetch('https://worldtimeapi.org/api/timezone/Asia/Jakarta', { signal: controller.signal });
+            clearTimeout(timeoutId);
             if (respon.ok) {
                 const data = await respon.json();
                 return new Date(data.datetime);
             }
-        } catch (e) { console.warn("Gagal mengambil waktu online."); }
+        } catch (e) { 
+            console.warn("Gagal mengambil waktu online, fallback ke waktu PC lokal."); 
+        }
         return new Date();
     }
 
-    // PERBAIKAN: Fungsi parser untuk membaca format string relatif Firebase Anda
+    // PERBAIKAN BUG: String parsing diamankan, unit ditambah, format ketat.
     function parseRelativeTime(str, baseDate) {
-        // Membersihkan spasi untuk membaca pola seperti "1 menit", "2 jam", dsb.
-        const match = str.toLowerCase().replace(/\s+/g, '').match(/^(\d+)(menit|jam|hari|bulan|tahun)$/);
+        if (!str) return null;
+        // Konversi paksa ke String agar angka `1` atau `2` tidak merusak fungsi .toLowerCase()
+        const cleanStr = String(str).toLowerCase().replace(/\s+/g, '');
+        const match = cleanStr.match(/^(\d+)(detik|menit|jam|hari|minggu|bulan|tahun)$/);
+        
         if (match) {
             const val = parseInt(match[1]);
             const unit = match[2];
             const d = new Date(baseDate.getTime());
             
-            if (unit === 'menit') d.setMinutes(d.getMinutes() + val);
+            if (unit === 'detik') d.setSeconds(d.getSeconds() + val);
+            else if (unit === 'menit') d.setMinutes(d.getMinutes() + val);
             else if (unit === 'jam') d.setHours(d.getHours() + val);
             else if (unit === 'hari') d.setDate(d.getDate() + val);
+            else if (unit === 'minggu') d.setDate(d.getDate() + (val * 7));
             else if (unit === 'bulan') d.setMonth(d.getMonth() + val);
             else if (unit === 'tahun') d.setFullYear(d.getFullYear() + val);
             
@@ -670,7 +680,6 @@
         if (countdownInterval) clearInterval(countdownInterval);
         const countdownDisp = document.getElementById('license-countdown-disp');
         
-        // PERBAIKAN: Nyalakan glow aktif
         countdownDisp.classList.remove('expired-glow');
         countdownDisp.classList.add('active-glow');
         
@@ -690,7 +699,6 @@
                 clearInterval(countdownInterval); isProUser = false;
                 countdownDisp.innerHTML = "❌ MASA AKTIF HABIS! SILAKAN UPGRADE";
                 
-                // PERBAIKAN: Nyalakan glow merah tanda habis
                 countdownDisp.classList.remove('active-glow');
                 countdownDisp.classList.add('expired-glow');
                 
@@ -701,11 +709,11 @@
             const menit = Math.floor((selisih % (1000 * 60 * 60)) / (1000 * 60));
             const detik = Math.floor((selisih % (1000 * 60)) / 1000);
             
-            // Layout hitung mundur disederhanakan sedikit agar rapi
             countdownDisp.innerHTML = `⏳ SISA PRO: ${hari}H ${jam}J ${menit}M ${detik}D`;
         }, 1000);
     }
 
+    // PERBAIKAN BUG: Anti Drama Blokir Update Firebase & Pencegahan Bug new Date()
     async function checkLicenseOnline(key) {
         if(!key || !window.fbDatabase) return;
         try {
@@ -714,7 +722,8 @@
             
             if (snapshot.exists()) {
                 const data = snapshot.val(); 
-                let expiredDateStr = data.expired_date;
+                // Pastikan dibaca sebagai string untuk mencegah kecelakaan jika terbaca integer/angka
+                let expiredDateStr = String(data.expired_date || "").trim();
 
                 if (data.status === "banned") { 
                     alert("Lisensi ini telah diblokir oleh administrator!");
@@ -727,34 +736,43 @@
                         isProUser = false; applyVisualLocks(); return; 
                     }
                 } else {
-                    await window.fbUpdate(keyRef, { device_id: ID_PERANGKAT_SEKARANG });
+                    // Try-Catch ditambahkan: Jika Rules Firebase 'write: false', script tidak akan crash dan tetap bisa login.
+                    try { 
+                        await window.fbUpdate(keyRef, { device_id: ID_PERANGKAT_SEKARANG }); 
+                    } catch(e) { console.warn("Peringatan: Gagal mengunci Device ID ke Firebase (Mungkin ditolak aturan Write), aktivasi diteruskan..."); }
                 }
 
-                if (!expiredDateStr) {
+                if (!expiredDateStr || expiredDateStr === "undefined") {
                     alert("Data kadaluarsa lisensi tidak ditemukan di server.");
                     isProUser = false; applyVisualLocks(); return;
                 }
                 
                 const hariIni = await dapatkanWaktuOnlineAkurat();
-                let expiredDate = new Date(expiredDateStr); 
+                let expiredDate;
+
+                // LOGIKA BARU: Cek format RELATIF (1menit / 1tahun) LEBIH DULU sebelum dikonversi new Date()
+                const parsedRelative = parseRelativeTime(expiredDateStr, hariIni);
                 
-                // PERBAIKAN LOGIKA: Jika format terbaca NaN, jalankan sinkronasi teks relatif 
-                if (isNaN(expiredDate.getTime())) {
-                    const parsedRelative = parseRelativeTime(expiredDateStr, hariIni);
-                    if (parsedRelative) {
-                        expiredDate = parsedRelative;
-                        expiredDateStr = parsedRelative.toISOString(); 
-                        
-                        // Timpa data relatif (ex: 1menit) di Firebase menjadi format absolut
-                        // Ini memastikan sisa waktu valid pada pengecekan berikutnya
-                        await window.fbUpdate(keyRef, { expired_date: expiredDateStr });
-                    } else {
-                        alert("Format tanggal kadaluarsa dari server tidak dikenali (Gunakan 1menit, 2jam, dll).");
+                if (parsedRelative) {
+                    // Berhasil terbaca format relatif ("1menit")
+                    expiredDate = parsedRelative;
+                    expiredDateStr = parsedRelative.toISOString(); 
+                    
+                    try { 
+                        // Update ke bentuk absolut ISO, gagal pun tak masalah untuk sesi saat ini
+                        await window.fbUpdate(keyRef, { expired_date: expiredDateStr }); 
+                    } catch(e) { console.warn("Peringatan: Gagal mengubah string format waktu di Firebase."); }
+                } else {
+                    // Jika tidak cocok dengan pola relatif, baca sebagai standar Tanggal Absolut/ISO (ex: 2024-12...)
+                    expiredDate = new Date(expiredDateStr);
+                    if (isNaN(expiredDate.getTime())) {
+                        alert("Format tanggal kadaluarsa dari server tidak dikenali (Gunakan 1menit, 2jam, dll atau Format ISO).");
                         isProUser = false; applyVisualLocks(); return;
                     }
                 }
 
-                if (hariIni > expiredDate) { 
+                // Cek masa aktif
+                if (hariIni.getTime() > expiredDate.getTime()) { 
                     alert("Masa aktif lisensi Anda telah habis!");
                     isProUser = false; applyVisualLocks(); 
                     
@@ -776,8 +794,8 @@
                 alert("Lisensi tidak valid atau tidak ditemukan di database!");
             }
         } catch (error) { 
-            console.error(error);
-            alert("Gagal terhubung ke server verifikasi. Periksa koneksi internet Anda.");
+            console.error("Firebase Auth Error:", error);
+            alert("Gagal terhubung ke server verifikasi. Periksa koneksi internet Anda atau setelan database Firebase.");
         }
     }
 
