@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AJI AUDIO LUMAJANG - DLMS HOREG PRO v5.6.4 (Local Presets Secured)</title>
+    <title>AJI AUDIO LUMAJANG - DLMS HOREG PRO v5.6.4 (Secured)</title>
     <style>
         :root {
             --bg-main: #070a0e;
@@ -61,12 +61,12 @@
         .dlms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         @media (max-width: 950px) { .dlms-grid { grid-template-columns: 1fr; } }
 
-        .channel-card { background: var(--bg-strip); border: 2px solid var(--border-color); border-radius: 6px; padding: 18px; }
+        .channel-card { background: var(--bg-strip); border: 2px solid var(--border-color); border-radius: 6px; padding: 18px; overflow: hidden; }
         .ch-l { border-top: 4px solid var(--accent-blue); }
         .ch-r { border-top: 4px solid var(--accent-pink); }
 
-        .channel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; }
-        .channel-title-group { display: flex; align-items: center; gap: 8px; }
+        .channel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;}
+        .channel-title-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .channel-title { font-size: 1.1rem; font-weight: bold; color: #fff; letter-spacing: 1px; }
         .channel-spec { font-size: 0.75rem; background: #070a0e; padding: 4px 8px; border-radius: 3px; color: #58a6ff; border: 1px solid var(--border-color); font-weight: bold; }
 
@@ -83,22 +83,30 @@
 
         .control-row { display: grid; grid-template-columns: 110px 1fr 70px; align-items: center; margin-bottom: 10px; gap: 10px; position: relative; }
         .control-row.with-mute { grid-template-columns: 110px 1fr 50px 50px 85px; }
+        @media (max-width: 600px) {
+            .control-row { grid-template-columns: 1fr; gap: 5px; }
+            .control-row.with-mute { grid-template-columns: 1fr 1fr 1fr; }
+            .control-row.with-mute > label { grid-column: span 3; }
+            .control-row.with-mute > input[type="range"] { grid-column: span 3; }
+        }
+
         label { font-size: 0.8rem; color: #8b9bb4; text-transform: uppercase; font-weight: bold; }
-        select { background: #070a0e; border: 1px solid var(--border-color); color: #fff; padding: 5px; border-radius: 3px; font-size: 0.75rem; font-weight: bold; }
+        select { background: #070a0e; border: 1px solid var(--border-color); color: #fff; padding: 5px; border-radius: 3px; font-size: 0.75rem; font-weight: bold; width: 100%; }
         
-        input[type="range"] { -webkit-appearance: none; height: 6px; background: #070a0e; border-radius: 3px; outline: none; border: 1px solid #1c232a; }
+        input[type="range"] { -webkit-appearance: none; height: 6px; background: #070a0e; border-radius: 3px; outline: none; border: 1px solid #1c232a; width: 100%; }
         .ch-l input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 2px; background: var(--accent-blue); cursor: pointer; box-shadow: 0 0 6px var(--accent-blue); border: none; }
         .ch-r input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 2px; background: var(--accent-pink); cursor: pointer; box-shadow: 0 0 6px var(--accent-pink); border: none; }
         .echo-block input[type="range"]::-webkit-slider-thumb { background: var(--accent-green) !important; box-shadow: 0 0 6px var(--accent-green) !important; }
         .val-disp { text-align: right; font-size: 0.85rem; font-weight: bold; color: #fff; }
+        @media (max-width: 600px) { .val-disp { text-align: left; } }
 
         .freq-input-box { width: 100%; background: #040608; border: 1px solid #3a4756; color: #fff; text-align: right; padding: 3px 5px; font-size: 0.8rem; font-weight: bold; border-radius: 3px; }
         .freq-input-box:focus { border-color: var(--accent-green); outline: none; box-shadow: 0 0 5px rgba(57, 255, 20, 0.4); }
         .freq-input-box::-webkit-inner-spin-button, .freq-input-box::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .freq-input-box { -moz-appearance: textfield; }
 
-        .eq-container { background: #070a0e; padding: 12px; border-radius: 4px; border: 1px solid var(--border-color); margin-top: 15px; }
-        .eq-header-block { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+        .eq-container { background: #070a0e; padding: 12px; border-radius: 4px; border: 1px solid var(--border-color); margin-top: 15px; width: 100%; box-sizing: border-box; }
+        .eq-header-block { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; flex-wrap: wrap; gap: 10px; }
         .eq-title { font-size: 0.75rem; color: #8b9bb4; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
         
         .eq-wrapper { display: flex; gap: 5px; position: relative; height: 200px; padding-top: 5px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--accent-green) #070a0e; }
@@ -111,9 +119,9 @@
         .eq-ch .eq-rt-val { font-size: 0.55rem; color: var(--accent-green); font-weight: bold; display: block; height: 12px; text-align: center; line-height: 12px; }
 
         .peq-input-wrap { display: flex; flex-direction: column; gap: 2px; width: 100%; background: #0b0e12; padding: 6px; border: 1px solid #21262d; border-radius: 4px; margin-top: 8px; }
-        .peq-row-layout { display: flex; justify-content: space-between; gap: 5px; align-items: center; }
+        .peq-row-layout { display: flex; justify-content: space-between; gap: 5px; align-items: center; flex-wrap: wrap; }
         .peq-title-sub { font-size: 0.65rem; color: var(--accent-blue); font-weight: bold; margin-bottom: 2px; }
-        .peq-field-item { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+        .peq-field-item { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 60px; }
         .peq-field-item label { font-size: 0.55rem; color: #6e7681; }
         .peq-box-val { background: #040608; border: 1px solid #3a4756; color: #fff; font-size: 0.7rem; font-weight: bold; text-align: center; padding: 2px; border-radius: 3px; width: 100%; }
 
@@ -125,7 +133,7 @@
         .limiter-horeg-panel { border: 1px solid rgba(255, 153, 0, 0.3) !important; background: #16120c !important; margin-top: 12px; padding: 12px; border-radius: 4px; }
 
         .preset-container { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; border-top: 1px solid var(--border-color); padding-top: 12px; }
-        .preset-actions { display: flex; gap: 5px; }
+        .preset-actions { display: flex; gap: 5px; flex-wrap: wrap;}
         .btn-preset-save { background: #1b4d22; border: 1px solid var(--accent-green); color: #fff; font-size: 0.75rem; padding: 6px 10px; flex: 1; font-weight: bold; }
         .btn-preset-delete { background: #4d1b1b; border: 1px solid var(--led-red); color: #fff; font-size: 0.75rem; padding: 6px 10px; font-weight: bold; }
         .preset-select-wrapper { display: flex; flex-direction: column; gap: 4px; }
@@ -166,11 +174,28 @@
         .locked-feature { filter: blur(1.5px) brightness(0.4) !important; pointer-events: none !important; user-select: none !important; }
         .lock-overlay-container { position: relative; }
         .lock-badge { position: absolute; top: 12px; right: 12px; background: rgba(225, 30, 30, 0.9); color: #fff; padding: 3px 8px; font-size: 0.6rem; font-weight: bold; border-radius: 3px; z-index: 10; letter-spacing: 1px; box-shadow: 0 2px 6px rgba(0,0,0,0.6); pointer-events: auto; cursor: pointer; white-space: nowrap; }
+
+        .audio-init-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.9); z-index: 9999; display: flex; 
+            justify-content: center; align-items: center; flex-direction: column; gap: 20px;
+        }
+        .btn-init-audio {
+            background: var(--accent-blue); color: #000; padding: 15px 30px; 
+            font-size: 1.2rem; font-weight: 900; border: none; border-radius: 8px; 
+            cursor: pointer; box-shadow: 0 0 20px rgba(0, 236, 255, 0.5);
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
+<div id="init-audio-overlay" class="audio-init-overlay">
+    <h2 style="color: var(--accent-blue); letter-spacing: 2px;">DLMS ENGINE STANDBY</h2>
+    <p style="color: #8b9bb4; text-align:center; max-width:400px; font-size: 0.9rem;">Sistem membutuhkan interaksi pertama untuk menyalakan Core Audio Engine.</p>
+    <button id="btn-start-engine" class="btn-init-audio">POWER ON / START ENGINE</button>
+</div>
+
+<div class="container" id="main-app" style="filter: blur(5px); pointer-events: none; transition: filter 0.5s ease;">
     <header>
         <h1>AJI AUDIO LUMAJANG</h1>
         <p>Digital Loudspeaker Management System Matrix • Core Engine Horeg v5.6.4</p>
@@ -206,7 +231,7 @@
         </div>
         
         <div class="lock-overlay-container">
-            <div id="badge-generator-lock" class="lock-badge" onclick="triggerActivationNotice()">PRO LOCKED</div>
+            <div class="lock-badge trigger-activation">PRO LOCKED</div>
             <div id="panel-generator-group" class="panel-block gradient-highlight">
                 <label style="font-weight: bold; color: var(--accent-green);">INTERNAL TEST TONE GEN</label>
                 <div style="display: flex; gap: 5px; margin-top: 8px;">
@@ -289,7 +314,7 @@
             </div>
             
             <div class="lock-overlay-container">
-                <div id="badge-limiter-l-lock" class="lock-badge" onclick="triggerActivationNotice()">PRO LOCK</div>
+                <div class="lock-badge trigger-activation">PRO LOCK</div>
                 <div id="panel-limiter-l" class="panel-block limiter-horeg-panel">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <label style="color: var(--led-orange); font-weight: bold;">🔒 LIMITER SETTING (CH 1)</label>
@@ -318,7 +343,9 @@
                         <button class="btn-mute" id="mute-eq-l">BYPASS PEQ</button>
                     </div>
                 </div>
-                <canvas id="peq-graph-l" class="peq-graph-canvas" width="600" height="150"></canvas>
+                <div id="canvas-container-l" style="width: 100%;">
+                    <canvas id="peq-graph-l" class="peq-graph-canvas"></canvas>
+                </div>
                 <div id="peq-sliders-l" style="display: flex; flex-direction: column; gap: 8px;"></div>
             </div>
         </div>
@@ -341,10 +368,10 @@
             
             <div class="control-row panel-block delay-highlight"><label style="color: var(--accent-pink); font-weight: bold;">TIME DELAY</label><input type="range" id="delay-r" min="0" max="50" step="0.1" value="0"><span class="val-disp" id="delay-disp-r" style="color: var(--accent-pink);">0.0 ms</span></div>
             
-            <div class="control-row panel-block echo-block" style="border: 1px solid rgba(57, 255, 20, 0.3); background: #0c140f; grid-template-columns: 100px 1fr 50px 70px; gap:5px;">
+            <div class="control-row panel-block echo-block" style="border: 1px solid rgba(57, 255, 20, 0.3); background: #0c140f; gap:5px;">
                 <label style="color: var(--accent-green); font-weight: bold; font-size:0.75rem;">Echo Fback</label>
                 <input type="range" id="echo-feedback-r" min="0" max="85" step="1" value="40">
-                <button class="btn-echo" id="btn-echo-toggle-r" style="padding: 2px 4px; font-size: 0.65rem;">ECHO BYP</button>
+                <button class="btn-echo" id="btn-echo-toggle-r" style="padding: 2px 4px; font-size: 0.65rem;">BYP</button>
                 <span class="val-disp" id="echo-disp-r" style="color: var(--accent-green); font-size:0.75rem;">40 %</span>
             </div>
             <div class="control-row panel-block echo-block" style="border: 1px solid rgba(57, 255, 20, 0.2); background: #080d0a; margin-top:-5px;">
@@ -382,7 +409,7 @@
             </div>
             
             <div class="lock-overlay-container">
-                <div id="badge-limiter-r-lock" class="lock-badge" onclick="triggerActivationNotice()">PRO LOCK</div>
+                <div class="lock-badge trigger-activation">PRO LOCK</div>
                 <div id="panel-limiter-r" class="panel-block limiter-horeg-panel">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <label style="color: var(--led-orange); font-weight: bold;">🔒 LIMITER SETTING (CH 2)</label>
@@ -420,6 +447,8 @@
 </div>
 
 <script type="module">
+    // NOTE: Sesuai struktur bawaan, Firebase rules harus Anda atur ketat di sisi Console Google.
+    // Variabel dikurung rapat di dalam module ini.
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, get, set, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
@@ -436,12 +465,6 @@
 
     const app = initializeApp(firebaseConfig);
     const database = getDatabase(app);
-
-    window.fbDatabase = database;
-    window.fbRef = ref;
-    window.fbGet = get;
-    window.fbSet = set;
-    window.fbUpdate = update;
 
     let isProUser = false; 
     let countdownInterval = null; 
@@ -518,7 +541,11 @@
     function triggerActivationNotice() {
         alert("🔒 PRO VERSION EXCLUSIVE\n\nFitur ini terkunci. Hubungi AD AUDIO PRODUCTION / AJI LUMAJANG untuk membeli lisensi penuh Pro Engine.");
     }
-    window.triggerActivationNotice = triggerActivationNotice;
+    
+    // Binding Notice ke element UI agar aman dari global
+    document.querySelectorAll('.trigger-activation').forEach(el => {
+        el.addEventListener('click', triggerActivationNotice);
+    });
 
     function applyVisualLocks() {
         const lockSelectMenu = (selectId) => {
@@ -670,7 +697,10 @@
 
         applyVisualLocks();
         perbaruiDaftarPresetLokal(); 
-        drawRealtimePEQCurve(); 
+        
+        // Memastikan resize canvas bekerja mulus
+        window.addEventListener('resize', handleCanvasResize);
+        setTimeout(handleCanvasResize, 100); 
     }
 
     function mulaiHitungMundur(expiredDateStr) {
@@ -702,9 +732,9 @@
                 applyVisualLocks(); 
                 
                 const savedKey = localStorage.getItem('aji_audio_saved_key');
-                if (savedKey && window.fbDatabase) {
-                    const keyRef = window.fbRef(window.fbDatabase, 'activation_keys/' + savedKey);
-                    window.fbUpdate(keyRef, { status: "expired" }).catch(() => console.warn("Gagal update status kedaluwarsa ke database"));
+                if (savedKey) {
+                    const keyRef = ref(database, 'activation_keys/' + savedKey);
+                    update(keyRef, { status: "expired" }).catch(() => console.warn("Gagal update status kedaluwarsa ke database"));
                 }
                 return;
             }
@@ -719,10 +749,10 @@
     }
 
     async function checkLicenseOnline(key) {
-        if(!key || !window.fbDatabase) return;
+        if(!key) return;
         try {
-            const keyRef = window.fbRef(window.fbDatabase, 'activation_keys/' + key);
-            const snapshot = await window.fbGet(keyRef);
+            const keyRef = ref(database, 'activation_keys/' + key);
+            const snapshot = await get(keyRef);
             
             if (snapshot.exists()) {
                 const data = snapshot.val(); 
@@ -740,7 +770,7 @@
                     }
                 } else {
                     try { 
-                        await window.fbUpdate(keyRef, { device_id: ID_PERANGKAT_SEKARANG }); 
+                        await update(keyRef, { device_id: ID_PERANGKAT_SEKARANG }); 
                     } catch(e) { console.warn("Peringatan: Gagal mengunci Device ID ke Firebase."); }
                 }
 
@@ -759,7 +789,7 @@
                     expiredDateStr = parsedRelative.toISOString(); 
                     
                     try { 
-                        await window.fbUpdate(keyRef, { expired_date: expiredDateStr }); 
+                        await update(keyRef, { expired_date: expiredDateStr }); 
                     } catch(e) { console.warn("Peringatan: Gagal mengubah string format waktu di Firebase."); }
                 } else {
                     expiredDate = new Date(expiredDateStr);
@@ -778,7 +808,7 @@
                     countdownDisp.classList.remove('active-glow');
                     countdownDisp.classList.add('expired-glow');
                     
-                    window.fbUpdate(keyRef, { status: "expired" }).catch(() => console.warn("Gagal menandai lisensi expired di DB."));
+                    update(keyRef, { status: "expired" }).catch(() => console.warn("Gagal menandai lisensi expired di DB."));
                 } else {
                     isProUser = true; 
                     localStorage.setItem('aji_audio_saved_key', key);
@@ -993,6 +1023,16 @@
         }
     }
 
+    function handleCanvasResize() {
+        const canvas = document.getElementById('peq-graph-l');
+        const container = document.getElementById('canvas-container-l');
+        if (!canvas || !container) return;
+        
+        // Sesuaikan lebar canvas ke container parent-nya secara dinamis
+        canvas.width = container.clientWidth;
+        drawRealtimePEQCurve();
+    }
+
     function drawRealtimePEQCurve() {
         const canvas = document.getElementById('peq-graph-l'); if (!canvas) return;
         const ctxRender = canvas.getContext('2d');
@@ -1072,6 +1112,7 @@
         ctxRender.stroke();
     }
 
+    // Inisialisasi Audio Engine dikunci di balik klik pertama
     function initSystemAudio() {
         if (audioCtx) return; 
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1094,8 +1135,13 @@
 
         audioSource = audioCtx.createMediaElementSource(audioPlayer); audioSource.connect(masterGainNode);
 
-        applyCurrentMode(); processRealtimeVUMeters(); syncAllHardwareSlidersToDSP();
+        applyCurrentMode(); syncAllHardwareSlidersToDSP();
         drawRealtimePEQCurve();
+        
+        // Memulai update grafik
+        if(!globalRenderReqId) {
+            processRealtimeVUMeters();
+        }
     }
 
     function applyCurrentMode() {
@@ -1115,7 +1161,6 @@
 
     function updateInternalGenerator() {
         if (!isProUser) { document.getElementById('gen-type').value = "off"; triggerActivationNotice(); return; }
-        if (!audioCtx) initSystemAudio();
         if (internalGenNode) { try { internalGenNode.stop(); } catch(e){} internalGenNode.disconnect(); internalGenNode = null; }
         const genType = document.getElementById('gen-type').value; const freqRow = document.getElementById('sine-freq-row');
         if (genType === 'off') { freqRow.style.display = 'none'; return; }
@@ -1164,7 +1209,11 @@
     }
 
     function processRealtimeVUMeters() {
-        if (!audioCtx || !nodeL || !nodeR) return;
+        // Optimasi: Hanya memproses saat audioCtx benar-benar ada dan berjalan
+        if (!audioCtx || audioCtx.state !== 'running') {
+            globalRenderReqId = requestAnimationFrame(processRealtimeVUMeters);
+            return;
+        }
 
         const renderVU = (analyserNode, limiterNode, barId, textId, grBarId, grTextId) => {
             let bufferLength = analyserNode.frequencyBinCount;
@@ -1209,8 +1258,8 @@
             }
         };
 
-        renderVU(nodeL.analyser, nodeL.limiter, 'vu-l', 'db-txt-l', 'vu-gr-l', 'gr-txt-l');
-        renderVU(nodeR.analyser, nodeR.limiter, 'vu-r', 'db-txt-r', 'vu-gr-r', 'gr-txt-r');
+        if(nodeL) renderVU(nodeL.analyser, nodeL.limiter, 'vu-l', 'db-txt-l', 'vu-gr-l', 'gr-txt-l');
+        if(nodeR) renderVU(nodeR.analyser, nodeR.limiter, 'vu-r', 'db-txt-r', 'vu-gr-r', 'gr-txt-r');
 
         globalRenderReqId = requestAnimationFrame(processRealtimeVUMeters);
     }
@@ -1280,7 +1329,6 @@
             drawRealtimePEQCurve();
         });
 
-        // Bagian yang sebelumnya terpotong disambung kembali dengan aman
         document.getElementById('eq-sliders-r').addEventListener('input', function(e) {
             if (e.target && e.target.type === 'range') {
                 const idx = parseInt(e.target.dataset.idx);
@@ -1290,7 +1338,6 @@
             }
         });
 
-        // Listener sisa elemen UI kanal R dan Interaksi Mute/Bypass
         const updateCHR = () => { if(nodeR) nodeR.updateCrossover(parseInt(document.getElementById('hpf-r').value), parseInt(document.getElementById('lpf-r').value), document.getElementById('slope-r').value); };
         setupBiDirectionalFilter('hpf-r', 'hpf-input-r', updateCHR); setupBiDirectionalFilter('lpf-r', 'lpf-input-r', updateCHR);
         document.getElementById('slope-r').addEventListener('change', (e) => lockSlopeChange(e, updateCHR));
@@ -1312,7 +1359,6 @@
             document.getElementById('echo-wet-disp').innerText = e.target.value + " %"; if(nodeR) nodeR.updateEcho();
         });
 
-        // Event listener Limiter
         ['l', 'r'].forEach(ch => {
             ['thold', 'atk', 'rel'].forEach(p => {
                 const el = document.getElementById(`lim-${p}-${ch}`);
@@ -1328,7 +1374,6 @@
             });
         });
 
-        // Mute & Bypass toggles
         const setupToggleButton = (btnId, stateObj, key, callback) => {
             const btn = document.getElementById(btnId); if(!btn) return;
             btn.addEventListener('click', () => {
@@ -1373,19 +1418,17 @@
             if(nodeR) nodeR.updateEQGains();
         });
 
-        // Sistem File Player Input
         document.getElementById('audio-file').addEventListener('change', function(e) {
             if (e.target.files[0]) {
                 audioPlayer.src = URL.createObjectURL(e.target.files[0]);
-                if (!audioCtx) initSystemAudio();
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
             }
         });
 
         audioPlayer.addEventListener('play', () => {
-            if (!audioCtx) initSystemAudio(); else if (audioCtx.state === 'suspended') audioCtx.resume();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         });
 
-        // Manajemen Aksi Preset Lokal
         document.getElementById('btn-save-preset').addEventListener('click', () => {
             const nama = prompt("Masukkan Nama Preset Baru:"); if(!nama) return;
             const presets = dapatkanPresetLokalSemua();
@@ -1416,10 +1459,10 @@
             const nama = e.target.value; if(!nama) return;
             const presets = dapatkanPresetLokalSemua(); const p = presets[nama]; if(!p) return;
 
-            const setTrig = (id, val) => { const el = document.getElementById(id); if(el) { el.value = val; el.dispatchEvent(new Event('input')); } };
+            const setTrig = (id, val) => { const el = document.getElementById(id); if(el) { el.value = val || 0; el.dispatchEvent(new Event('input')); } };
             
             setTrig('master-gain', p.mg); setTrig('gain-l', p.gl); setTrig('hpf-l', p.hpfL); setTrig('lpf-l', p.lpfL);
-            const slL = document.getElementById('slope-l'); if(slL) { slL.value = p.slopeL; slL.dispatchEvent(new Event('change')); }
+            const slL = document.getElementById('slope-l'); if(slL && p.slopeL) { slL.value = p.slopeL; slL.dispatchEvent(new Event('change')); }
             if(p.peqL) {
                 p.peqL.forEach((b, i) => {
                     if(document.getElementById(`peq-f-l-${i}`)) document.getElementById(`peq-f-l-${i}`).value = b.f;
@@ -1429,7 +1472,7 @@
             }
 
             setTrig('gain-r', p.gr); setTrig('hpf-r', p.hpfR); setTrig('lpf-r', p.lpfR); setTrig('delay-r', p.delayR); setTrig('echo-feedback-r', p.fbackR); setTrig('echo-wet-r', p.wetR);
-            const slR = document.getElementById('slope-r'); if(slR) { slR.value = p.slopeR; slR.dispatchEvent(new Event('change')); }
+            const slR = document.getElementById('slope-r'); if(slR && p.slopeR) { slR.value = p.slopeR; slR.dispatchEvent(new Event('change')); }
             if(p.geqR) {
                 p.geqR.forEach((v, i) => {
                     const rSl = document.getElementById(`eq-r-${i}`); if(rSl) { rSl.value = v; rSl.dispatchEvent(new Event('input')); }
@@ -1438,7 +1481,6 @@
             if(nodeL) nodeL.updateEQGains(); if(nodeR) nodeR.updateEQGains(); drawRealtimePEQCurve(); alert(`Preset "${nama}" berhasil di-load.`);
         });
 
-        // Tombol Aktivasi Lisensi Pro Online
         document.getElementById('btn-activate-license').addEventListener('click', () => {
             const key = document.getElementById('input-license-key').value.trim();
             if(!key) { alert("Masukkan Lisensi Pro Key terlebih dahulu!"); return; }
@@ -1446,14 +1488,28 @@
         });
     }
 
-    // Alur Inisialisasi Boot Awal Aplikasi
+    // Inisialisasi Aplikasi (dengan tombol Overlay untuk Autoplay Policy)
     window.addEventListener('DOMContentLoaded', () => {
-        buildInterfaceAwal(); connectUIElements();
-        const savedKey = localStorage.getItem('aji_audio_saved_key');
-        if(savedKey) {
-            document.getElementById('input-license-key').value = savedKey;
-            checkLicenseOnline(savedKey);
-        }
+        buildInterfaceAwal(); 
+        connectUIElements();
+        
+        const overlay = document.getElementById('init-audio-overlay');
+        const mainApp = document.getElementById('main-app');
+        const btnStart = document.getElementById('btn-start-engine');
+
+        btnStart.addEventListener('click', () => {
+            initSystemAudio();
+            overlay.style.display = 'none';
+            mainApp.style.filter = 'none';
+            mainApp.style.pointerEvents = 'auto';
+
+            // Cek lisensi otomatis jika pernah tersimpan sebelumnya
+            const savedKey = localStorage.getItem('aji_audio_saved_key');
+            if(savedKey) {
+                document.getElementById('input-license-key').value = savedKey;
+                checkLicenseOnline(savedKey);
+            }
+        });
     });
 </script>
 </body>
