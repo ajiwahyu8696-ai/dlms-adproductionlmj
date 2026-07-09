@@ -371,7 +371,7 @@
             <div class="control-row panel-block echo-block" style="border: 1px solid rgba(57, 255, 20, 0.3); background: #0c140f; gap:5px;">
                 <label style="color: var(--accent-green); font-weight: bold; font-size:0.75rem;">Echo Fback</label>
                 <input type="range" id="echo-feedback-r" min="0" max="85" step="1" value="40">
-                <button class="btn-echo" id="btn-echo-toggle-r" style="padding: 2px 4px; font-size: 0.65rem;">BYP</button>
+                <button class="btn-echo" id="btn-echo-toggle-r" style="padding: 2px 4px; font-size: 0.65rem;">ON/OFF</button>
                 <span class="val-disp" id="echo-disp-r" style="color: var(--accent-green); font-size:0.75rem;">40 %</span>
             </div>
             <div class="control-row panel-block echo-block" style="border: 1px solid rgba(57, 255, 20, 0.2); background: #080d0a; margin-top:-5px;">
@@ -1493,8 +1493,8 @@
             const presets = dapatkanPresetLokalSemua(); const p = presets[nama]; if(!p) return;
 
             // Trigger aman yang akan memicu render text dari UI listener original
-            const setTrig = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined) { el.value = val; el.dispatchEvent(new Event('input')); } };
-            const setChangeTrig = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined) { el.value = val; el.dispatchEvent(new Event('change')); } };
+            const setTrig = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined) { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); } };
+            const setChangeTrig = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined) { el.value = val; el.dispatchEvent(new Event('change', { bubbles: true })); } };
             
             setTrig('master-gain', p.mg); 
             
@@ -1512,10 +1512,19 @@
                     const fEl = document.getElementById(`peq-f-l-${i}`);
                     const qEl = document.getElementById(`peq-q-l-${i}`);
                     const gEl = document.getElementById(`peq-g-l-${i}`);
+                    
                     if(fEl) { fEl.value = b.f; }
                     if(qEl) { qEl.value = b.q; }
-                    // Trigger input di gain akan mengirim semua parameter (F, Q, G) ke DSP
-                    if(gEl) { gEl.value = b.g; gEl.dispatchEvent(new Event('input')); } 
+                    
+                    // PERBAIKAN BUBBLING: Memperbarui teks secara manual DAN mengirim event dengan bubbles:true
+                    if(gEl) { 
+                        gEl.value = b.g; 
+                        const textVal = document.getElementById(`peq-g-val-l-${i}`);
+                        if (textVal) {
+                            textVal.innerText = parseFloat(b.g).toFixed(1) + " dB";
+                        }
+                        gEl.dispatchEvent(new Event('input', { bubbles: true })); 
+                    } 
                 });
             }
 
@@ -1533,7 +1542,18 @@
 
             if(p.geqR) {
                 p.geqR.forEach((v, i) => {
-                    const rSl = document.getElementById(`eq-r-${i}`); if(rSl) { rSl.value = v; rSl.dispatchEvent(new Event('input')); }
+                    const rSl = document.getElementById(`eq-r-${i}`); 
+                    if(rSl) { 
+                        rSl.value = v; 
+                        
+                        // PERBAIKAN BUBBLING GEQ: Update UI Manual & Kirim event
+                        let val = parseFloat(v);
+                        let disp = val === 0 ? "0dB" : (val > 0 ? "+" + val.toFixed(1) + "dB" : val.toFixed(1) + "dB");
+                        const textVal = document.getElementById(`eq-val-r-${i}`);
+                        if(textVal) textVal.innerText = disp;
+                        
+                        rSl.dispatchEvent(new Event('input', { bubbles: true })); 
+                    }
                 });
             }
             
