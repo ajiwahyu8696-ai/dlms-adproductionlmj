@@ -1333,7 +1333,18 @@
             if (e.target && e.target.type === 'range') {
                 const idx = parseInt(e.target.dataset.idx);
                 const val = parseFloat(e.target.value);
-                document.getElementById(`eq-val-r-${idx}`).innerText = (val >= 0 ? '+' : '') + val.toFixed(1) + "dB";
+                
+                // PERBAIKAN BUG GEQ 15 BAND: Mencegah output +0.0dB saat nilai tepat 0
+                let disp = "";
+                if (val === 0) {
+                    disp = "0dB";
+                } else if (val > 0) {
+                    disp = "+" + val.toFixed(1) + "dB";
+                } else {
+                    disp = val.toFixed(1) + "dB";
+                }
+                
+                document.getElementById(`eq-val-r-${idx}`).innerText = disp;
                 if (nodeR) nodeR.updateEQGains();
             }
         });
@@ -1429,6 +1440,7 @@
             if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         });
 
+        // PERBAIKAN BUG DESINKRONISASI PADA SAAT SAVE
         document.getElementById('btn-save-preset').addEventListener('click', () => {
             const nama = prompt("Masukkan Nama Preset Baru:"); if(!nama) return;
             const presets = dapatkanPresetLokalSemua();
@@ -1438,10 +1450,30 @@
             });
             const stateR = []; eqFreqsR.forEach((_, i) => { stateR.push(document.getElementById(`eq-r-${i}`).value); });
 
+            // Simpan semua parameter termasuk limiters yang sebelumnya tertinggal
             presets[nama] = {
                 mg: document.getElementById('master-gain').value,
-                gl: document.getElementById('gain-l').value, hpfL: document.getElementById('hpf-l').value, lpfL: document.getElementById('lpf-l').value, slopeL: document.getElementById('slope-l').value, peqL: stateL,
-                gr: document.getElementById('gain-r').value, hpfR: document.getElementById('hpf-r').value, lpfR: document.getElementById('lpf-r').value, slopeR: document.getElementById('slope-r').value, delayR: document.getElementById('delay-r').value, fbackR: document.getElementById('echo-feedback-r').value, wetR: document.getElementById('echo-wet-r').value, geqR: stateR
+                
+                gl: document.getElementById('gain-l').value, 
+                hpfL: document.getElementById('hpf-l').value, 
+                lpfL: document.getElementById('lpf-l').value, 
+                slopeL: document.getElementById('slope-l').value, 
+                peqL: stateL,
+                limTholdL: document.getElementById('lim-thold-l') ? document.getElementById('lim-thold-l').value : -1.0,
+                limAtkL: document.getElementById('lim-atk-l') ? document.getElementById('lim-atk-l').value : 30,
+                limRelL: document.getElementById('lim-rel-l') ? document.getElementById('lim-rel-l').value : 500,
+                
+                gr: document.getElementById('gain-r').value, 
+                hpfR: document.getElementById('hpf-r').value, 
+                lpfR: document.getElementById('lpf-r').value, 
+                slopeR: document.getElementById('slope-r').value, 
+                delayR: document.getElementById('delay-r').value, 
+                fbackR: document.getElementById('echo-feedback-r').value, 
+                wetR: document.getElementById('echo-wet-r').value,
+                limTholdR: document.getElementById('lim-thold-r') ? document.getElementById('lim-thold-r').value : -3.0,
+                limAtkR: document.getElementById('lim-atk-r') ? document.getElementById('lim-atk-r').value : 3,
+                limRelR: document.getElementById('lim-rel-r') ? document.getElementById('lim-rel-r').value : 60,
+                geqR: stateR
             };
             
             simpanPresetLokalSemua(presets); perbaruiDaftarPresetLokal(); alert(`Preset "${nama}" berhasil disimpan di memori internal perangkat.`);
@@ -1455,30 +1487,63 @@
             }
         });
 
+        // PERBAIKAN BUG DESINKRONISASI PADA SAAT LOAD
         document.getElementById('select-local-preset').addEventListener('change', (e) => {
             const nama = e.target.value; if(!nama) return;
             const presets = dapatkanPresetLokalSemua(); const p = presets[nama]; if(!p) return;
 
-            const setTrig = (id, val) => { const el = document.getElementById(id); if(el) { el.value = val || 0; el.dispatchEvent(new Event('input')); } };
+            // Trigger aman yang akan memicu render text dari UI listener original
+            const setTrig = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined) { el.value = val; el.dispatchEvent(new Event('input')); } };
+            const setChangeTrig = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined) { el.value = val; el.dispatchEvent(new Event('change')); } };
             
-            setTrig('master-gain', p.mg); setTrig('gain-l', p.gl); setTrig('hpf-l', p.hpfL); setTrig('lpf-l', p.lpfL);
-            const slL = document.getElementById('slope-l'); if(slL && p.slopeL) { slL.value = p.slopeL; slL.dispatchEvent(new Event('change')); }
+            setTrig('master-gain', p.mg); 
+            
+            setTrig('gain-l', p.gl); 
+            setTrig('hpf-l', p.hpfL); 
+            setTrig('lpf-l', p.lpfL);
+            setChangeTrig('slope-l', p.slopeL);
+            
+            if (p.limTholdL !== undefined) setTrig('lim-thold-l', p.limTholdL);
+            if (p.limAtkL !== undefined) setTrig('lim-atk-l', p.limAtkL);
+            if (p.limRelL !== undefined) setTrig('lim-rel-l', p.limRelL);
+
             if(p.peqL) {
                 p.peqL.forEach((b, i) => {
-                    if(document.getElementById(`peq-f-l-${i}`)) document.getElementById(`peq-f-l-${i}`).value = b.f;
-                    if(document.getElementById(`peq-g-l-${i}`)) { document.getElementById(`peq-g-l-${i}`).value = b.g; document.getElementById(`peq-g-l-${i}`).dispatchEvent(new Event('input')); }
-                    if(document.getElementById(`peq-q-l-${i}`)) document.getElementById(`peq-q-l-${i}`).value = b.q;
+                    const fEl = document.getElementById(`peq-f-l-${i}`);
+                    const qEl = document.getElementById(`peq-q-l-${i}`);
+                    const gEl = document.getElementById(`peq-g-l-${i}`);
+                    if(fEl) { fEl.value = b.f; }
+                    if(qEl) { qEl.value = b.q; }
+                    // Trigger input di gain akan mengirim semua parameter (F, Q, G) ke DSP
+                    if(gEl) { gEl.value = b.g; gEl.dispatchEvent(new Event('input')); } 
                 });
             }
 
-            setTrig('gain-r', p.gr); setTrig('hpf-r', p.hpfR); setTrig('lpf-r', p.lpfR); setTrig('delay-r', p.delayR); setTrig('echo-feedback-r', p.fbackR); setTrig('echo-wet-r', p.wetR);
-            const slR = document.getElementById('slope-r'); if(slR && p.slopeR) { slR.value = p.slopeR; slR.dispatchEvent(new Event('change')); }
+            setTrig('gain-r', p.gr); 
+            setTrig('hpf-r', p.hpfR); 
+            setTrig('lpf-r', p.lpfR); 
+            setChangeTrig('slope-r', p.slopeR);
+            setTrig('delay-r', p.delayR); 
+            setTrig('echo-feedback-r', p.fbackR); 
+            setTrig('echo-wet-r', p.wetR);
+            
+            if (p.limTholdR !== undefined) setTrig('lim-thold-r', p.limTholdR);
+            if (p.limAtkR !== undefined) setTrig('lim-atk-r', p.limAtkR);
+            if (p.limRelR !== undefined) setTrig('lim-rel-r', p.limRelR);
+
             if(p.geqR) {
                 p.geqR.forEach((v, i) => {
                     const rSl = document.getElementById(`eq-r-${i}`); if(rSl) { rSl.value = v; rSl.dispatchEvent(new Event('input')); }
                 });
             }
-            if(nodeL) nodeL.updateEQGains(); if(nodeR) nodeR.updateEQGains(); drawRealtimePEQCurve(); alert(`Preset "${nama}" berhasil di-load.`);
+            
+            // Hard Sync DSP ke Hardware untuk menjamin audio node 100% sama dengan UI Slider
+            if (nodeL) nodeL.updateEQGains(); 
+            if (nodeR) nodeR.updateEQGains(); 
+            syncAllHardwareSlidersToDSP();
+            drawRealtimePEQCurve();
+            
+            alert(`Preset "${nama}" berhasil di-load.`);
         });
 
         document.getElementById('btn-activate-license').addEventListener('click', () => {
