@@ -500,20 +500,21 @@
     const ID_PERANGKAT_SEKARANG = ambilAtauBuatDeviceId();
 
     async function dapatkanWaktuOnlineAkurat() {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
-            const respon = await fetch('https://worldtimeapi.org/api/timezone/Asia/Jakarta', { signal: controller.signal });
-            clearTimeout(timeoutId);
-            if (respon.ok) {
-                const data = await respon.json();
-                return new Date(data.datetime);
-            }
-        } catch (e) { 
-            console.warn("Gagal mengambil waktu online, fallback ke waktu PC lokal."); 
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const respon = await fetch('https://worldtimeapi.org/api/timezone/Asia/Jakarta', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (respon.ok) {
+            const data = await respon.json();
+            return new Date(data.datetime);
         }
-        return new Date();
+    } catch (e) { 
+        console.warn("API Waktu gagal. Menolak memvalidasi berbasis waktu lokal demi keamanan.");
+        // Anda bisa melempar error di sini daripada return new Date()
+        throw new Error("Koneksi ke server waktu terputus."); 
     }
+}
 
     function parseRelativeTime(str, baseDate) {
         if (!str) return null;
@@ -699,8 +700,11 @@
         perbaruiDaftarPresetLokal(); 
         
         // Memastikan resize canvas bekerja mulus
-        window.addEventListener('resize', handleCanvasResize);
-        setTimeout(handleCanvasResize, 100); 
+        let resizeTimer;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(handleCanvasResize, 150); // Menunggu 150ms setelah resize berhenti
+});
     }
 
     function mulaiHitungMundur(expiredDateStr) {
@@ -888,8 +892,16 @@
                 });
             }
 
-            this.limiter = this.ctx.createDynamicsCompressor(); this.limiter.knee.value = 0; 
+                        this.limiter = this.ctx.createDynamicsCompressor(); this.limiter.knee.value = 0; 
             this.analyser = this.ctx.createAnalyser(); this.analyser.fftSize = 64;
+            
+            // --- TAMBAHAN: RTA High-Res Khusus Background PEQ ---
+            this.spectrumAnalyser = this.ctx.createAnalyser();
+            this.spectrumAnalyser.fftSize = 8192; // Resolusi tinggi agar bass akurat
+            this.spectrumAnalyser.smoothingTimeConstant = 0.85;
+            // Ambil sinyal dari phaseNode (sebelum masuk Crossover/EQ) agar menampilkan sumber audio asli
+            this.phaseNode.connect(this.spectrumAnalyser); 
+            // ----------------------------------------------------
 
             lastNode.connect(this.analyser); this.analyser.connect(this.limiter);
         }
@@ -1042,23 +1054,59 @@
         const fMin = 20;
         const fMax = 1000;
 
-        ctxRender.strokeStyle = '#1c232a'; ctxRender.lineWidth = 1;
-        const gridFreqs = [20, 30, 40, 50, 70, 100, 150, 200, 300, 400, 500, 700, 1000];
-        gridFreqs.forEach(fLine => {
-            let x = Math.log10(fLine / fMin) / Math.log10(fMax / fMin) * W;
-            ctxRender.beginPath(); ctxRender.moveTo(x, 0); ctxRender.lineTo(x, H); ctxRender.stroke();
-        });
-        ctxRender.beginPath(); ctxRender.moveTo(0, H/2); ctxRender.lineTo(W, H/2); ctxRender.stroke();
-
-        ctxRender.fillStyle = '#6e7681'; ctxRender.font = '10px Consolas';
+                ctxRender.fillStyle = '#6e7681'; ctxRender.font = '10px Consolas';
         [20, 50, 100, 200, 500, 1000].forEach(lbl => {
             let x = Math.log10(lbl / fMin) / Math.log10(fMax / fMin) * W;
             ctxRender.fillText(lbl + 'Hz', x + 2, H - 4);
         });
 
+        // --- TAMBAHAN: DRAW REAL-TIME SPECTRUM AUDIO ---
+        if (audioCtx && audioCtx.state === 'running' && nodeL && nodeL.spectrumAnalyser) {
+            const bufferLength = nodeL.spectrumAnalyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            nodeL.spectrumAnalyser.getByteFrequencyData(dataArray);
+
+            const nyquist = audioCtx.sampleRate / 2;
+            const freqPerBin = nyquist / bufferLength;
+
+            ctxRender.beginPath();
+            ctxRender.fillStyle = 'rgba(0, 236, 255, 0.15)'; // Cyan transparan agar tidak menabrak garis EQ
+            ctxRender.strokeStyle = 'rgba(0, 236, 255, 0.4)';
+            ctxRender.lineWidth = 1;
+            
+            let started = false;
+            let lastX = 0;
+            
+            for (let i = 0; i < bufferLength; i++) {
+                let freq = i * freqPerBin;
+                // Hanya proses frekuensi di rentang fMin (20Hz) hingga fMax (1000Hz)
+                if (freq >= fMin && freq <= fMax) {
+                    let x = (Math.log10(freq / fMin) / Math.log10(fMax / fMin)) * W;
+                    // Konversi nilai 0-255 ke tinggi canvas
+                    let y = H - (dataArray[i] / 255) * H; 
+                    
+                    if (!started) {
+                        ctxRender.moveTo(x, H); // Mulai dari dasar
+                        started = true;
+                    }
+                    ctxRender.lineTo(x, y);
+                    lastX = x;
+                } else if (freq > fMax) {
+                    break;
+                }
+            }
+            if (started) {
+                ctxRender.lineTo(lastX, H); // Tutup area ke dasar agar rapi
+                ctxRender.closePath();
+                ctxRender.fill();
+                ctxRender.stroke();
+            }
+        }
+        // --- END SPECTRUM AUDIO ---
+
         const Fs = audioCtx ? audioCtx.sampleRate : 44100; 
         let activeBands = [];
-        
+
         if (!muteState.l.eq) {
             for (let i = 0; i < 3; i++) {
                 if (!isProUser && i > 1) continue; 
@@ -1258,10 +1306,16 @@
             }
         };
 
-        if(nodeL) renderVU(nodeL.analyser, nodeL.limiter, 'vu-l', 'db-txt-l', 'vu-gr-l', 'gr-txt-l');
+                if(nodeL) renderVU(nodeL.analyser, nodeL.limiter, 'vu-l', 'db-txt-l', 'vu-gr-l', 'gr-txt-l');
         if(nodeR) renderVU(nodeR.analyser, nodeR.limiter, 'vu-r', 'db-txt-r', 'vu-gr-r', 'gr-txt-r');
 
-        globalRenderReqId = requestAnimationFrame(processRealtimeVUMeters);
+        // --- TAMBAHAN: Render ulang PEQ terus-menerus untuk animasi lagu ---
+        if (nodeL && nodeL.spectrumAnalyser) {
+            drawRealtimePEQCurve();
+        }
+        // -------------------------------------------------------------------
+
+        globalRenderReqId = requestAnimationFrame(processRealtimeVUMeters);        
     }
 
     function connectUIElements() {
