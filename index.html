@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AJI AUDIO LUMAJANG - DLMS HOREG PRO v6.0.0 UPDATE (Secured)</title>
+    <title>AJI AUDIO LUMAJANG - DLMS HOREG PRO v6.1.0 UPDATE (Secured)</title>
     <style>
         :root {
             --bg-main: #070a0e;
@@ -198,7 +198,7 @@
 <div class="container" id="main-app" style="filter: blur(5px); pointer-events: none; transition: filter 0.5s ease;">
     <header>
         <h1>AJI AUDIO LUMAJANG</h1>
-        <p>Digital Loudspeaker Management System Matrix • Core Engine Horeg v6.0.0 UPDATE</p>
+        <p>Digital Loudspeaker Management System Matrix • Core Engine Horeg v6.1.0 UPDATE 5 Band PEQ EQ</p>
     </header>
 
     <div class="master-grid">
@@ -337,7 +337,7 @@
 
             <div class="eq-container">
                 <div class="eq-header-block">
-                    <div class="eq-title">3-Band Parametric EQ (PEQ Matrix L)</div>
+                    <div class="eq-title">5-Band Parametric EQ (PEQ Matrix L)</div>
                     <div style="display: flex; gap: 5px;">
                         <button class="btn-byp" id="reset-eq-l" style="font-size: 0.75rem; padding: 4px 8px;">RESET PEQ</button>
                         <button class="btn-mute" id="mute-eq-l">BYPASS PEQ</button>
@@ -469,10 +469,12 @@
     let isProUser = false; 
     let countdownInterval = null; 
 
-    const peqDefaultsL = [
-        { f: 45, g: 0, q: 2.0 },
-        { f: 65, g: 0, q: 2.5 },
-        { f: 90, g: 0, q: 2.0 }
+        const peqDefaultsL = [
+        { f: 45, g: 0, q: 2.0 },  // PEQ 1 (Sub-Sonic) - FREE
+        { f: 65, g: 0, q: 2.5 },  // PEQ 2 (Deep Bass) - PRO
+        { f: 90, g: 0, q: 2.0 },  // PEQ 3 (Kick/Punch) - PRO
+        { f: 120, g: 0, q: 2.0 }, // PEQ 4 (Mud Control) - PRO
+        { f: 180, g: 0, q: 1.5 }  // PEQ 5 (Low-Mid Attack) - PRO
     ];
 
     const eqFreqsR = [630, 800, '1k', '1.25k', '1.6k', '2k', '2.5k', '3.15k', '4k', '5k', '6.3k', '8k', '10k', '12.5k', '16k'];
@@ -564,7 +566,7 @@
             }
         };
 
-        if (!isProUser) {
+                if (!isProUser) {
             document.getElementById('panel-generator-group').classList.add('locked-feature');
             document.getElementById('panel-limiter-l').classList.add('locked-feature');
             document.getElementById('panel-limiter-r').classList.add('locked-feature');
@@ -573,10 +575,13 @@
             lockSelectMenu('slope-l');
             lockSelectMenu('slope-r');
             
-            const peq3Block = document.getElementById(`peq-block-l-2`);
-            if(peq3Block) peq3Block.classList.add('locked-feature');
+            // KUNCI PEQ 2, 3, 4, 5 (Index 1 sampai 4)
+            for(let i = 1; i < 5; i++) {
+                const peqBlock = document.getElementById(`peq-block-l-${i}`);
+                if(peqBlock) peqBlock.classList.add('locked-feature');
+            }
 
-            for(let i = 5; i < 15; i++) {
+            for(let i = 5; i < 15; i++) { // GEQ R Lock
                 const sliderNode = document.getElementById(`eq-r-${i}`);
                 if(sliderNode && sliderNode.parentElement) {
                     sliderNode.parentElement.classList.add('locked-feature');
@@ -593,10 +598,13 @@
             lockSelectMenu('slope-l');
             lockSelectMenu('slope-r');
             
-            const peq3Block = document.getElementById(`peq-block-l-2`);
-            if(peq3Block) peq3Block.classList.remove('locked-feature');
+            // BUKA KUNCI PEQ 2, 3, 4, 5
+            for(let i = 1; i < 5; i++) {
+                const peqBlock = document.getElementById(`peq-block-l-${i}`);
+                if(peqBlock) peqBlock.classList.remove('locked-feature');
+            }
 
-            for(let i = 5; i < 15; i++) {
+            for(let i = 5; i < 15; i++) { // GEQ R Unlock
                 const sliderNode = document.getElementById(`eq-r-${i}`);
                 if(sliderNode && sliderNode.parentElement) {
                     sliderNode.parentElement.classList.remove('locked-feature');
@@ -879,7 +887,7 @@ window.addEventListener('resize', () => {
             let lastNode = this.lpf4; 
 
             if (this.type === 'L') {
-                for (let i = 0; i < 3; i++) {
+                for (let i = 0; i < 5; i++) {
                     const eq = this.ctx.createBiquadFilter(); eq.type = 'peaking';
                     eq.frequency.value = peqDefaultsL[i].f; eq.Q.value = peqDefaultsL[i].q; eq.gain.value = peqDefaultsL[i].g;
                     this.eqFilters.push(eq); lastNode.connect(eq); lastNode = eq;
@@ -990,7 +998,7 @@ window.addEventListener('resize', () => {
                 if (muteState[chKey].eq) { eq.gain.setTargetAtTime(0, this.ctx.currentTime, 0.02); } 
                 else {
                     if (chKey === 'l') {
-                        if(!isProUser && idx > 1) { eq.gain.setTargetAtTime(0, this.ctx.currentTime, 0.02); return; }
+                        if(!isProUser && idx > 0) { eq.gain.setTargetAtTime(0, this.ctx.currentTime, 0.02); return; }
                         let fInput = document.getElementById(`peq-f-l-${idx}`);
                         let gSlider = document.getElementById(`peq-g-l-${idx}`);
                         let qInput = document.getElementById(`peq-q-l-${idx}`);
@@ -1013,10 +1021,22 @@ window.addEventListener('resize', () => {
         }
 
         setMute(isMuted) {
-            if (!this.ctx) return;
-            if (isMuted) this.gainNode.gain.setTargetAtTime(0, this.ctx.currentTime, 0.02);
-            else this.gainNode.gain.setTargetAtTime(this.currentGainVal, this.ctx.currentTime, 0.02);
-        }
+    if (!this.ctx) return;
+    let t = this.ctx.currentTime;
+    
+    // 1. Bersihkan sisa instruksi automasi sebelumnya yang menyangkut
+    this.gainNode.gain.cancelScheduledValues(t);
+    
+    // 2. Beri "anchor" nilai saat ini agar Audio Engine langsung merespons
+    this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, t);
+    
+    // 3. Gunakan linearRampToValueAtTime (lebih stabil dan pasti sampai target ketimbang setTargetAtTime)
+    if (isMuted) {
+        this.gainNode.gain.linearRampToValueAtTime(0, t + 0.03);
+    } else {
+        this.gainNode.gain.linearRampToValueAtTime(this.currentGainVal, t + 0.03);
+    }
+}
 
         togglePhase(isInverted) {
             if (!this.ctx) return; this.phaseNode.gain.setValueAtTime(isInverted ? -1.0 : 1.0, this.ctx.currentTime);
@@ -1107,9 +1127,9 @@ window.addEventListener('resize', () => {
         const Fs = audioCtx ? audioCtx.sampleRate : 44100; 
         let activeBands = [];
 
-        if (!muteState.l.eq) {
-            for (let i = 0; i < 3; i++) {
-                if (!isProUser && i > 1) continue; 
+                if (!muteState.l.eq) {
+            for (let i = 0; i < 5; i++) { // UBAH 3 JADI 5
+                if (!isProUser && i > 0) continue;  // UBAH 1 JADI 0 (Kunci pembacaan canvas PEQ 2-5)
                 
                 let fEl = document.getElementById(`peq-f-l-${i}`);
                 let gEl = document.getElementById(`peq-g-l-${i}`);
