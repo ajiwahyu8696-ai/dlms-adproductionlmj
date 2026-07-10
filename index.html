@@ -511,7 +511,7 @@
         }
     } catch (e) { 
         console.warn("API Waktu gagal. Menolak memvalidasi berbasis waktu lokal demi keamanan.");
-        // Anda bisa melempar error di sini daripada return new Date()
+        return new Date();
         throw new Error("Koneksi ke server waktu terputus."); 
     }
 }
