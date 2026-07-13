@@ -915,69 +915,110 @@ window.addEventListener('resize', () => {
         }
 
         applyDspMode(mode) {
-            if (!this.ctx) return;
-            let t = this.ctx.currentTime;
-            if (mode === "lowcut") {
-                this.modeFilter.type = "highpass"; this.modeFilter.frequency.setTargetAtTime(40, t, 0.02); this.modeFilter.Q.setTargetAtTime(0.707, t, 0.02);
-            } else if (mode === "superbass") {
-                this.modeFilter.type = "peaking"; this.modeFilter.frequency.setTargetAtTime(60, t, 0.02); this.modeFilter.Q.setTargetAtTime(2.0, t, 0.02); this.modeFilter.gain.setTargetAtTime(6, t, 0.02); 
-            } else {
-                this.modeFilter.type = "peaking";
-                this.modeFilter.frequency.setTargetAtTime(1000, t, 0.02);
-                this.modeFilter.gain.setTargetAtTime(0, t, 0.02); 
-                this.modeFilter.Q.setTargetAtTime(1.0, t, 0.02); 
-            }
-        }
+    if (!this.ctx) return;
+    let t = this.ctx.currentTime;
+
+    // 1. Bersihkan sisa instruksi automasi sebelumnya
+    this.modeFilter.frequency.cancelScheduledValues(t);
+    this.modeFilter.Q.cancelScheduledValues(t);
+    this.modeFilter.gain.cancelScheduledValues(t);
+
+    // 2. Beri "anchor" nilai saat ini agar tidak diabaikan engine
+    this.modeFilter.frequency.setValueAtTime(this.modeFilter.frequency.value, t);
+    this.modeFilter.Q.setValueAtTime(this.modeFilter.Q.value, t);
+    this.modeFilter.gain.setValueAtTime(this.modeFilter.gain.value, t);
+
+    // 3. Eksekusi transisi (Ramp jauh lebih akurat dari setTarget)
+    if (mode === "lowcut") {
+        this.modeFilter.type = "highpass";
+        this.modeFilter.frequency.linearRampToValueAtTime(40, t + 0.02);
+        this.modeFilter.Q.linearRampToValueAtTime(0.707, t + 0.02);
+    } else if (mode === "superbass") {
+        this.modeFilter.type = "peaking";
+        this.modeFilter.frequency.linearRampToValueAtTime(60, t + 0.02);
+        this.modeFilter.Q.linearRampToValueAtTime(2.0, t + 0.02);
+        this.modeFilter.gain.linearRampToValueAtTime(6, t + 0.02);
+    } else {
+        this.modeFilter.type = "peaking";
+        this.modeFilter.frequency.linearRampToValueAtTime(1000, t + 0.02);
+        this.modeFilter.gain.linearRampToValueAtTime(0, t + 0.02);
+        this.modeFilter.Q.linearRampToValueAtTime(1.0, t + 0.02);
+    }
+}
 
         updateCrossover(hpfVal, lpfVal, slopeType) {
-            if (!this.ctx || !muteState) return; 
-            const chKey = this.type.toLowerCase();
-            let t = this.ctx.currentTime;
-            let isHpfDeactivated = muteState[chKey].hpfByp || muteState[chKey].hpfMute;
-            let isLpfDeactivated = muteState[chKey].lpfByp || muteState[chKey].lpfMute;
+    if (!this.ctx || !muteState) return; 
+    const chKey = this.type.toLowerCase();
+    let t = this.ctx.currentTime;
+    let isHpfDeactivated = muteState[chKey].hpfByp || muteState[chKey].hpfMute;
+    let isLpfDeactivated = muteState[chKey].lpfByp || muteState[chKey].lpfMute;
 
-            [this.hpf1, this.hpf2, this.hpf3, this.hpf4, this.lpf1, this.lpf2, this.lpf3, this.lpf4].forEach(f => f.type = 'allpass');
+    // 1. Kumpulkan semua filter crossover
+    const allFilters = [this.hpf1, this.hpf2, this.hpf3, this.hpf4, this.lpf1, this.lpf2, this.lpf3, this.lpf4];
+    
+    // 2. Beri "anchor" & bersihkan jadwal sebelumnya agar transisi tidak nyangkut (Bug Web Audio)
+    allFilters.forEach(f => {
+        f.frequency.cancelScheduledValues(t);
+        f.Q.cancelScheduledValues(t);
+        f.frequency.setValueAtTime(f.frequency.value, t);
+        f.Q.setValueAtTime(f.Q.value, t);
+        f.type = 'allpass'; // Reset semua ke transparan (allpass) dulu
+    });
 
-            if (!isHpfDeactivated) {
-                this.hpf1.type = 'highpass'; this.hpf1.frequency.setTargetAtTime(hpfVal, t, 0.02);
-                if (slopeType.includes("24") || slopeType.includes("48")) { 
-                    this.hpf2.type = 'highpass'; this.hpf2.frequency.setTargetAtTime(hpfVal, t, 0.02); 
-                }
-                if (slopeType.includes("48")) {
-                    this.hpf3.type = 'highpass'; this.hpf3.frequency.setTargetAtTime(hpfVal, t, 0.02);
-                    this.hpf4.type = 'highpass'; this.hpf4.frequency.setTargetAtTime(hpfVal, t, 0.02);
-                }
-            }
-
-            if (!isLpfDeactivated) {
-                this.lpf1.type = 'lowpass'; this.lpf1.frequency.setTargetAtTime(lpfVal, t, 0.02);
-                if (slopeType.includes("24") || slopeType.includes("48")) { 
-                    this.lpf2.type = 'lowpass'; this.lpf2.frequency.setTargetAtTime(lpfVal, t, 0.02); 
-                }
-                if (slopeType.includes("48")) {
-                    this.lpf3.type = 'lowpass'; this.lpf3.frequency.setTargetAtTime(lpfVal, t, 0.02);
-                    this.lpf4.type = 'lowpass'; this.lpf4.frequency.setTargetAtTime(lpfVal, t, 0.02);
-                }
-            }
-
-            if (slopeType === "lr12" || slopeType === "bw12") {
-                this.hpf1.Q.setValueAtTime(0.707, t); this.lpf1.Q.setValueAtTime(0.707, t);
-            } else if (slopeType === "lr24") {
-                this.hpf1.Q.setValueAtTime(0.707, t); this.hpf2.Q.setValueAtTime(0.707, t);
-                this.lpf1.Q.setValueAtTime(0.707, t); this.lpf2.Q.setValueAtTime(0.707, t);
-            } else if (slopeType === "bw24") {
-                this.hpf1.Q.setValueAtTime(0.541, t); this.hpf2.Q.setValueAtTime(1.306, t);
-                this.lpf1.Q.setValueAtTime(0.541, t); this.lpf2.Q.setValueAtTime(1.306, t);
-            } else if (slopeType === "lr48") {
-                [this.hpf1, this.hpf3, this.lpf1, this.lpf3].forEach(f => f.Q.setValueAtTime(0.541, t));
-                [this.hpf2, this.hpf4, this.lpf2, this.lpf4].forEach(f => f.Q.setValueAtTime(1.306, t));
-            } else if (slopeType === "bw48") {
-                [this.hpf1, this.lpf1].forEach(f => f.Q.setValueAtTime(0.51, t));
-                [this.hpf2, this.lpf2].forEach(f => f.Q.setValueAtTime(0.601, t));
-                [this.hpf3, this.lpf3].forEach(f => f.Q.setValueAtTime(0.9, t));
-                [this.hpf4, this.lpf4].forEach(f => f.Q.setValueAtTime(2.56, t));
-            }
+    // 3. Eksekusi HPF menggunakan linearRamp (Lebih stabil dari setTarget)
+    if (!isHpfDeactivated) {
+        this.hpf1.type = 'highpass'; 
+        this.hpf1.frequency.linearRampToValueAtTime(hpfVal, t + 0.02);
+        
+        if (slopeType.includes("24") || slopeType.includes("48")) { 
+            this.hpf2.type = 'highpass'; 
+            this.hpf2.frequency.linearRampToValueAtTime(hpfVal, t + 0.02); 
         }
+        if (slopeType.includes("48")) {
+            this.hpf3.type = 'highpass'; 
+            this.hpf3.frequency.linearRampToValueAtTime(hpfVal, t + 0.02);
+            this.hpf4.type = 'highpass'; 
+            this.hpf4.frequency.linearRampToValueAtTime(hpfVal, t + 0.02);
+        }
+    }
+
+    // 4. Eksekusi LPF
+    if (!isLpfDeactivated) {
+        this.lpf1.type = 'lowpass'; 
+        this.lpf1.frequency.linearRampToValueAtTime(lpfVal, t + 0.02);
+        
+        if (slopeType.includes("24") || slopeType.includes("48")) { 
+            this.lpf2.type = 'lowpass'; 
+            this.lpf2.frequency.linearRampToValueAtTime(lpfVal, t + 0.02); 
+        }
+        if (slopeType.includes("48")) {
+            this.lpf3.type = 'lowpass'; 
+            this.lpf3.frequency.linearRampToValueAtTime(lpfVal, t + 0.02);
+            this.lpf4.type = 'lowpass'; 
+            this.lpf4.frequency.linearRampToValueAtTime(lpfVal, t + 0.02);
+        }
+    }
+
+    // 5. Terapkan nilai Q sesuai jenis Slope (LR atau BW)
+    if (slopeType === "lr12" || slopeType === "bw12") {
+        this.hpf1.Q.linearRampToValueAtTime(0.707, t + 0.02); 
+        this.lpf1.Q.linearRampToValueAtTime(0.707, t + 0.02);
+    } else if (slopeType === "lr24") {
+        this.hpf1.Q.linearRampToValueAtTime(0.707, t + 0.02); this.hpf2.Q.linearRampToValueAtTime(0.707, t + 0.02);
+        this.lpf1.Q.linearRampToValueAtTime(0.707, t + 0.02); this.lpf2.Q.linearRampToValueAtTime(0.707, t + 0.02);
+    } else if (slopeType === "bw24") {
+        this.hpf1.Q.linearRampToValueAtTime(0.541, t + 0.02); this.hpf2.Q.linearRampToValueAtTime(1.306, t + 0.02);
+        this.lpf1.Q.linearRampToValueAtTime(0.541, t + 0.02); this.lpf2.Q.linearRampToValueAtTime(1.306, t + 0.02);
+    } else if (slopeType === "lr48") {
+        [this.hpf1, this.hpf3, this.lpf1, this.lpf3].forEach(f => f.Q.linearRampToValueAtTime(0.541, t + 0.02));
+        [this.hpf2, this.hpf4, this.lpf2, this.lpf4].forEach(f => f.Q.linearRampToValueAtTime(1.306, t + 0.02));
+    } else if (slopeType === "bw48") {
+        [this.hpf1, this.lpf1].forEach(f => f.Q.linearRampToValueAtTime(0.51, t + 0.02));
+        [this.hpf2, this.lpf2].forEach(f => f.Q.linearRampToValueAtTime(0.601, t + 0.02));
+        [this.hpf3, this.lpf3].forEach(f => f.Q.linearRampToValueAtTime(0.9, t + 0.02));
+        [this.hpf4, this.lpf4].forEach(f => f.Q.linearRampToValueAtTime(2.56, t + 0.02));
+    }
+}
 
         updateLimiterHardware() {
             if (!this.ctx) return;
